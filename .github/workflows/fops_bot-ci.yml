@@ -16,12 +16,13 @@ jobs:
   test:
     name: Pytest the Bot
     runs-on: ubuntu-latest
+    needs: [formatblack, build-and-publish-image] 
     steps:
       - uses: actions/checkout@master
         with:
           fetch-depth: 1
-      - name: Run Makefile
-        run: make test
+      - name: Test the bot image
+        run: docker-compose -f docker-compose-prod.yml run fops_bot test
       - name: Discord notification
         if: ${{ failure() }}
         env:
@@ -63,7 +64,7 @@ jobs:
   build-and-publish-image:
     name: Build and Publish Registry Image
     runs-on: ubuntu-latest
-    needs: [test, formatblack] # Keeps the bot from updating the image if its not tested/formatted
+    needs: [formatblack] # Keeps the bot from updating the image if its not tested/formatted
 
     permissions:
       contents: read
@@ -101,7 +102,7 @@ jobs:
         run: |
           echo "${{ steps.branch-name.outputs.current_branch }}"
           echo "${{ steps.meta.outputs.tags }}"
-          echo "CUSTOM_TAG=ghcr.io/KenwoodFox/FOpS-Bot:$(echo "${{ steps.branch-name.outputs.current_branch }}" | sed 's/[^a-zA-Z0-9]/-/g; s/[A-Z]/\L&/g')" >> $GITHUB_ENV
+          echo "CUSTOM_TAG=ghcr.io/kenwoodfox/fops-bot:$(echo "${{ steps.branch-name.outputs.current_branch }}" | sed 's/[^a-zA-Z0-9]/-/g; s/[A-Z]/\L&/g')" >> $GITHUB_ENV
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v2
