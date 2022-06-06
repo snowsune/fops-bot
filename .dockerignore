@@ -1,0 +1,14 @@
+# Ignore everything
+*
+
+# Don't ignore...
+!fops_bot/
+!requirements/
+!resources/
+!bin/
+!setup.py
+!README.md
+!LICENSE
+
+# Testing
+!tests/
