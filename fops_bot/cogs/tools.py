@@ -17,10 +17,10 @@ class ToolCog(commands.Cog, name="Tools"):
     async def on_ready(self):
         status_channel = self.bot.get_channel(963065508628926477)
 
-        await self.bot.get_guild(963065508628926474).me.edit(nick="Adman")
+        await self.bot.get_guild(963065508628926474).me.edit(nick="Fops")
 
         await status_channel.send(
-            f"Admin Bot version `{self.bot.version}` just restarted."
+            f"Fops Bot version `{self.bot.version}` just restarted."
         )
 
     @commands.command()

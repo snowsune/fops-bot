@@ -18,7 +18,7 @@ services:
       - ./postgres-data:/var/lib/postgresql/data
 
   fops_bot:
-    image: ghcr.io/kenwoodfox/fopsbot:main
+    image: ghcr.io/kenwoodfox/fops-bot:main
     environment:
       BOT_TOKEN: "secret.token.here"
     restart: "always"
