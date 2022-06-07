@@ -28,7 +28,7 @@ class ToolCog(commands.Cog, name="Tools"):
         f"""
         Prints the revision/version.
 
-        Ex: {self.prefix}version
+        Ex: {self.bot.prefix}version
 
         Written by Joe.
         """
@@ -40,7 +40,7 @@ class ToolCog(commands.Cog, name="Tools"):
         f"""
         Allows users to request a feature
 
-        Ex: {self.prefix}feature Give the bot a self destruct command!
+        Ex: {self.bot.prefix}feature Give the bot a self destruct command!
 
         Written by Joe.
         """
