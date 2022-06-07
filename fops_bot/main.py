@@ -1,4 +1,4 @@
-# Tidal Force robotics
+# FOSNHU
 # 2021, Fops Bot
 # MIT License
 
@@ -13,7 +13,8 @@ from discord.ext import commands
 class FopsBot(object):
     def __init__(self):
         # Create our discord bot
-        self.bot = commands.Bot(command_prefix="^")
+        self.prefix = "."
+        self.bot = commands.Bot(command_prefix=self.prefix)
 
         # Get the build commit that the code was built with.
         self.version = str(os.environ.get("GIT_COMMIT"))  # Currently running version
@@ -75,11 +76,8 @@ class FopsBot(object):
         """
 
         spam_channels = [
-            590931089426612284,
-            853061635904503838,
-            941894218123710475,
-            590349708992708627,
-            957837307577241601,
+            983809633091219456,
+            983458372009459742,
         ]
 
         if ctx.channel.id not in spam_channels:  # Check if this channel is ok for spam

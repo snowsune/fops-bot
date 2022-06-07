@@ -1,4 +1,4 @@
-# FOS
+# FOSNHU
 # 2021, Fops Bot
 # MIT License
 
