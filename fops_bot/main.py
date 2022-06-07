@@ -15,7 +15,6 @@ class FopsBot(object):
         # Create our discord bot
         prefix = "."
         self.bot = commands.Bot(command_prefix=prefix)
-        self.bot.prefix = prefix  # May be unneeded
 
         # Get the build commit that the code was built with.
         self.version = str(os.environ.get("GIT_COMMIT"))  # Currently running version
