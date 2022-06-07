@@ -1,5 +1,6 @@
 # See here https://hub.docker.com/r/gorialis/discord.py/
-FROM gorialis/discord.py
+#FROM gorialis/discord.py
+FROM python:3.10-slim
 
 # Authors
 LABEL authors="31870999+KenwoodFox@users.noreply.github.com"
@@ -17,7 +18,7 @@ ARG HOME="/app"
 ENV HOME=${HOME}
 
 # Upgrade pip
-RUN pip install --upgrade pip
+RUN pip install --upgrade pip --no-cache-dir
 
 # Set workdir
 WORKDIR ${HOME}
@@ -26,9 +27,9 @@ WORKDIR ${HOME}
 ADD requirements requirements/
 
 # Install normal reqs
-RUN pip install -r requirements/requirements.txt
+RUN pip install -r requirements/requirements.txt --no-cache-dir
 # Install testing reqs
-RUN pip install -r requirements/test_requirements.txt
+RUN pip install -r requirements/test_requirements.txt --no-cache-dir
 
 # Copy in everything else
 ADD . ${HOME}
@@ -36,7 +37,7 @@ ADD . ${HOME}
 ENV PATH $PATH:${HOME}/bin
 
 # Install our app in edit mode using pip
-RUN pip install -e ${HOME}
+RUN pip install -e ${HOME} --no-cache-dir
 
 # Drop root and change ownership of /app to app:app
 RUN chown -R ${USER_ID}:${GROUP_ID} ${HOME}
