@@ -13,8 +13,9 @@ from discord.ext import commands
 class FopsBot(object):
     def __init__(self):
         # Create our discord bot
-        self.prefix = "."
-        self.bot = commands.Bot(command_prefix=self.prefix)
+        prefix = "."
+        self.bot = commands.Bot(command_prefix=prefix)
+        self.bot.prefix = prefix  # May be unneeded
 
         # Get the build commit that the code was built with.
         self.version = str(os.environ.get("GIT_COMMIT"))  # Currently running version
