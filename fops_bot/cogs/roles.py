@@ -20,8 +20,7 @@ class SelfAssignRoleCog(commands.Cog, name="Roles"):
             "Remote",
             "Vulpes",
             "Canis lupus familiaris",
-            "Canis lupus"
-            "Feline",
+            "Canis lupus" "Feline",
         ]
 
     @commands.command()
