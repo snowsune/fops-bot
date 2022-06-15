@@ -18,12 +18,12 @@ class SelfAssignRoleCog(commands.Cog, name="Roles"):
         self.self_assignable_roles = [
             "On Campus",
             "Remote",
-            "Vulpes",
-            "Canis lupus familiaris",
-            "Canis lupus",
+            "Vulpine",
+            "Canine",
             "Feline",
             "Lagomorph",
             "Marsupial",
+            "Avian",
         ]
 
     @commands.command()
