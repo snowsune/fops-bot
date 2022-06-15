@@ -22,6 +22,8 @@ class SelfAssignRoleCog(commands.Cog, name="Roles"):
             "Canis lupus familiaris",
             "Canis lupus",
             "Feline",
+            "Lagomorph",
+            "Marsupial",
         ]
 
     @commands.command()
