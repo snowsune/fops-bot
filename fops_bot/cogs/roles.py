@@ -20,7 +20,8 @@ class SelfAssignRoleCog(commands.Cog, name="Roles"):
             "Remote",
             "Vulpes",
             "Canis lupus familiaris",
-            "Canis lupus" "Feline",
+            "Canis lupus",
+            "Feline",
         ]
 
     @commands.command()
@@ -28,7 +29,7 @@ class SelfAssignRoleCog(commands.Cog, name="Roles"):
         """
         Adds a user to a self assignable role.
 
-        ex: ^addroles "Feline"
+        ex: .addroles "Feline"
 
         Written by Joe.
         """
@@ -53,7 +54,7 @@ class SelfAssignRoleCog(commands.Cog, name="Roles"):
             await ctx.send(f"You've been added to the following roles: {roles}")
         else:
             await ctx.send(
-                f"Invalid role name or unassignable role (make sure you spelt it correctly, and used qoutes, ie: `{self_assignable_roles[0]}` or `{self_assignable_roles[2]}`) Role was: {roles}"
+                f"Invalid role name or unassignable role (make sure you spelt it correctly, and used qoutes, ie: `{self.self_assignable_roles[0]}` or `{self.self_assignable_roles[2]}`) Role was: {roles}"
             )
 
     @commands.command()
@@ -61,7 +62,7 @@ class SelfAssignRoleCog(commands.Cog, name="Roles"):
         """
         Removes a user from a role (or roles),
 
-        ex: ^removeroles "Canis lupus"
+        ex: .removeroles "Canis lupus"
 
         Written by Joe.
         """
@@ -80,7 +81,7 @@ class SelfAssignRoleCog(commands.Cog, name="Roles"):
             await ctx.send(f"You've been removed from the following roles: {roles}")
         else:
             await ctx.send(
-                f"Invalid role name or unassignable role (make sure you spelt it correctly, and used qoutes, ie: `{self_assignable_roles[0]}` or `{self_assignable_roles[2]}`) Role was: {roles}"
+                f"Invalid role name or unassignable role (make sure you spelt it correctly, and used qoutes, ie: `{self.self_assignable_roles[0]}` or `{self.self_assignable_roles[2]}`) Role was: {roles}"
             )
 
     @commands.command()
