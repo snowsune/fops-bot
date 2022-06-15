@@ -25,10 +25,10 @@ class ToolCog(commands.Cog, name="Tools"):
 
     @commands.command()
     async def version(self, ctx, *, member: discord.Member = None):
-        f"""
+        """
         Prints the revision/version.
 
-        Ex: {self.bot.prefix}version
+        Ex: .version
 
         Written by Joe.
         """
@@ -37,10 +37,10 @@ class ToolCog(commands.Cog, name="Tools"):
 
     @commands.command()
     async def feature(self, ctx, *args):
-        f"""
+        """
         Allows users to request a feature
 
-        Ex: {self.bot.prefix}feature Give the bot a self destruct command!
+        Ex: .feature Give the bot a self destruct command!
 
         Written by Joe.
         """
