@@ -19,3 +19,9 @@ New in version {{version}}
 - Removed unused services (`ARP_WATCH`, `STAT_GET`)
 
 More to come! I'll have `/register` and `/deregister` working for the holes next update. And hopefully a booru search feature!
+
+## Changelog 2
+
+Ok! Kinda half baked, but news for <@&1248737660315635754>s!
+
+I have added the `/register` and `/deregister` commands, they may be slightly buggy but my early testing says they worked mostly ok! I have some big plans tho and I just wanted to add a quick way right now for people to quickly join and leave when they wish. (dont want anyone being spammed unwillingly).

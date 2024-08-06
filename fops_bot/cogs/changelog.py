@@ -44,14 +44,14 @@ class Changelog(commands.Cog):
         # Crack the data we need
         logging.info(f"Loading {changelog_path}")
         _d = get_current_changelog(changelog_path)
-        cur_lognum = _d[0]
+        cur_lognum = int(_d[0])
         cur_logstr = _d[1]
 
         logging.info(
             f"Changelog is currently {cur_lognum}/{self.last_log}. Content was: {cur_logstr}"
         )
 
-        if cur_lognum == self.last_log:
+        if cur_lognum == int(self.last_log):
             # If they match, we're done and we can pack up
             logging.info("No new changelog to report.")
             return

@@ -15,6 +15,8 @@ def init_db():
     )
 
     cur = conn.cursor()
+
+    # This table is for the key-value pair
     cur.execute(
         """
     CREATE TABLE IF NOT EXISTS key_value_store (
@@ -23,6 +25,20 @@ def init_db():
     )
     """
     )
+
+    # Table for dynamic hole registration
+    cur.execute(
+        """
+    CREATE TABLE IF NOT EXISTS dynamic_users (
+        guild_id TEXT,
+        chan_id TEXT,
+        user_id TEXT,
+        fluff TEXT,
+        PRIMARY KEY (guild_id, chan_id, user_id)
+    )
+    """
+    )
+
     conn.commit()
     cur.close()
     conn.close()
