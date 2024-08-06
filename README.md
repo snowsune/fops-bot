@@ -25,3 +25,11 @@ More to come! I'll have `/register` and `/deregister` working for the holes next
 Ok! Kinda half baked, but news for <@&1248737660315635754>s!
 
 I have added the `/register` and `/deregister` commands, they may be slightly buggy but my early testing says they worked mostly ok! I have some big plans tho and I just wanted to add a quick way right now for people to quickly join and leave when they wish. (dont want anyone being spammed unwillingly).
+
+
+## Changelog 3
+
+Thank you <@257599292343058433> for reporting this bug.
+
+Fixed in {{version}}
+- Deregistering will immediately kick your seat from the queue

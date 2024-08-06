@@ -5,7 +5,7 @@ import logging
 import os
 
 
-def init_db():
+def getCur():
     conn = psycopg.connect(
         dbname=os.getenv("DB_NAME"),
         user=os.getenv("DB_USER"),
@@ -13,8 +13,13 @@ def init_db():
         host=os.getenv("DB_HOST"),
         port=os.getenv("DB_PORT"),
     )
-
     cur = conn.cursor()
+
+    return cur, conn
+
+
+def init_db():
+    cur, conn = getCur()
 
     # This table is for the key-value pair
     cur.execute(
@@ -47,15 +52,8 @@ def init_db():
 
 
 def store_key(key, value):
-    conn = psycopg.connect(
-        dbname=os.getenv("DB_NAME"),
-        user=os.getenv("DB_USER"),
-        password=os.getenv("DB_PASS"),
-        host=os.getenv("DB_HOST"),
-        port=os.getenv("DB_PORT"),
-    )
+    cur, conn = getCur()
 
-    cur = conn.cursor()
     cur.execute(
         """
     INSERT INTO key_value_store (key, value)
@@ -71,15 +69,8 @@ def store_key(key, value):
 
 
 def retrieve_key(key, default=None):
-    conn = psycopg.connect(
-        dbname=os.getenv("DB_NAME"),
-        user=os.getenv("DB_USER"),
-        password=os.getenv("DB_PASS"),
-        host=os.getenv("DB_HOST"),
-        port=os.getenv("DB_PORT"),
-    )
+    cur, conn = getCur()
 
-    cur = conn.cursor()
     cur.execute(
         """
     SELECT value FROM key_value_store WHERE key = %s

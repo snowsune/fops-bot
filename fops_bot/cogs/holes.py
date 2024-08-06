@@ -19,7 +19,7 @@ from discord.ext import commands, tasks
 from datetime import datetime, timedelta, timezone
 
 from utilities.common import seconds_until
-from utilities.database import retrieve_key, store_key
+from utilities.database import retrieve_key, store_key, getCur
 
 
 class HolesCog(commands.Cog, name="HolesCog"):
@@ -139,6 +139,9 @@ class HolesCog(commands.Cog, name="HolesCog"):
     def isCurrentUserStale(self):
         # Helper function to check if we need to update the current user
 
+        # DB Cursor
+        cur, conn = getCur()
+
         # Iter all servers
         for server_config in self.config["dynamic"]:
             # Retrieve value
@@ -163,6 +166,26 @@ class HolesCog(commands.Cog, name="HolesCog"):
                     True  # Not sure how we would get here but, yeah we'd need to update
                 )
 
+            # Check if the user has been removed/deregistered from the queue
+            cur.execute(
+                """
+                SELECT COUNT(*)
+                FROM dynamic_users
+                WHERE guild_id = %s AND chan_id = %s AND user_id = %s
+                """,
+                (server_config["guild_id"], server_config["chan_id"], curId),
+            )
+            user_exists = cur.fetchone()[0]
+
+            if user_exists == 0:
+                logging.info(
+                    f"User ID is stale because the user {curId} has deregistered"
+                )
+                cur.close()
+                conn.close()
+                return True
+
+            # Check regular user time
             if int(time.time()) - int(userTime) > (21600):
                 logging.info(
                     f"User ID is stale because the time has expired, {int(time.time()) - int(userTime)} > {21600}"
@@ -171,7 +194,16 @@ class HolesCog(commands.Cog, name="HolesCog"):
 
         return False
 
-    @tasks.loop(seconds=10)
+    def fetch_dynamic_users(self):
+        cur, conn = getCur()
+        cur.execute("SELECT guild_id, chan_id, user_id, fluff FROM dynamic_users")
+        users = cur.fetchall()
+        cur.close()
+        conn.close()
+
+        return users
+
+    @tasks.loop(seconds=30)
     async def rotate_dynamic_users(self):
         # populate if needed
         if not self.isCurrentUserStale():
@@ -232,7 +264,8 @@ class HolesCog(commands.Cog, name="HolesCog"):
     # ===================
 
     @app_commands.command(
-        name="register", description="Register for the random-hole in this guild"
+        name="register",
+        description="Register for the random-hole in this guild! (You'll be chosen randomly~)",
     )
     @app_commands.describe(fluff="A little sneak to display when you're chosen~")
     async def register(self, interaction: discord.Interaction, fluff: str):
@@ -241,18 +274,12 @@ class HolesCog(commands.Cog, name="HolesCog"):
         user_id = str(interaction.user.id)
 
         if isinstance(interaction.channel, discord.channel.DMChannel):
-            await interaction.response.send_message("Must use in a guild!", ephemeral=True)
+            await interaction.response.send_message(
+                "Must use in a guild!", ephemeral=True
+            )
             return
 
-        conn = psycopg.connect(
-            dbname=os.getenv("DB_NAME"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASS"),
-            host=os.getenv("DB_HOST"),
-            port=os.getenv("DB_PORT"),
-        )
-
-        cur = conn.cursor()
+        cur, conn = getCur()
         cur.execute(
             """
             INSERT INTO dynamic_users (guild_id, chan_id, user_id, fluff)
@@ -270,7 +297,8 @@ class HolesCog(commands.Cog, name="HolesCog"):
         )
 
     @app_commands.command(
-        name="deregister", description="Deregister from the hole in this guild"
+        name="deregister",
+        description="Deregister from the hole in this guild. (You'll be removed from the queue)",
     )
     async def deregister(self, interaction: discord.Interaction):
         guild_id = str(interaction.guild.id)
@@ -278,18 +306,12 @@ class HolesCog(commands.Cog, name="HolesCog"):
         user_id = str(interaction.user.id)
 
         if isinstance(interaction.channel, discord.channel.DMChannel):
-            await interaction.response.send_message("Must use in a guild!", ephemeral=True)
+            await interaction.response.send_message(
+                "Must use in a guild!", ephemeral=True
+            )
             return
 
-        conn = psycopg.connect(
-            dbname=os.getenv("DB_NAME"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASS"),
-            host=os.getenv("DB_HOST"),
-            port=os.getenv("DB_PORT"),
-        )
-
-        cur = conn.cursor()
+        cur, conn = getCur()
         cur.execute(
             """
             DELETE FROM dynamic_users
@@ -304,6 +326,9 @@ class HolesCog(commands.Cog, name="HolesCog"):
         await interaction.response.send_message(
             "Deregistered from the hole", ephemeral=True
         )
+
+        # Send a hook to restart the rotation task
+        self.rotate_dynamic_users.restart()
 
 
 async def setup(bot):
