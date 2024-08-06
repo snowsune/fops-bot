@@ -6,6 +6,8 @@ from typing import Literal, Optional
 from discord import app_commands
 from discord.ext import commands
 
+from utilities.database import store_key, retrieve_key
+
 
 class ToolCog(commands.Cog, name="Tools"):
     def __init__(self, bot):
@@ -16,7 +18,29 @@ class ToolCog(commands.Cog, name="Tools"):
         """
         Prints the revision/version.
         """
-        await ctx.response.send_message(f"I am running version `{self.bot.version}`.")
+
+        dbstatus = "Unknown"
+        vc = None
+
+        try:
+            if self.bot.dbReady:
+                try:
+                    vc = retrieve_key("version_count", 0)
+                    logging.info(f"Retreived vc as {vc}")
+                    dbstatus = "Ready"
+                except Exception as e:
+                    logging.error(f"Error retrieving key, error was {e}")
+                    dbstatus = "Not Ready (connected but cant retrieve now)"
+
+                store_key("version_count", int(vc) + 1)
+            else:
+                dbstatus = "Not Ready"
+        except Exception as e:
+            logging.error(f"Couldn't check db at all, error was {e}")
+
+        await ctx.response.send_message(
+            f"I am running version `{self.bot.version}`. DB is `{dbstatus}`, access `{vc}`"
+        )
 
     @commands.command()
     @commands.guild_only()

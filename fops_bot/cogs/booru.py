@@ -14,6 +14,8 @@ from typing import Literal, Optional
 from discord import app_commands
 from discord.ext import commands, tasks
 
+from utilities.database import retrieve_key, store_key
+
 
 booru_scripts = imp.load_source("booru_scripts", "fops_bot/scripts/danbooru-scripts.py")
 
@@ -100,9 +102,8 @@ class Grab(commands.Cog):
             ", "
         )  # Todo, better way to strip whitespace
 
-        # Numbers/Stats
-        self.image_count = 0
-
+    @commands.Cog.listener()
+    async def on_ready(self):
         # Tasks
         self.update_status.start()
 
@@ -234,7 +235,8 @@ class Grab(commands.Cog):
             # TODO: Move to shared func
 
         # Increment image count
-        self.image_count += 1
+        ic = retrieve_key("image_count", 1)
+        store_key("image_count", int(ic) + 1)
 
         # Clean up the download
         os.remove(file_path)
@@ -270,7 +272,9 @@ class Grab(commands.Cog):
 
         if current_minute % 2 == 0:
             await self.bot.change_presence(
-                activity=discord.Game(name=f"images scanned: {self.image_count}")
+                activity=discord.Game(
+                    name=f"images scanned: {retrieve_key('image_count', 1)}"
+                )
             )
         else:
             await self.bot.change_presence(

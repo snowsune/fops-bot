@@ -1,6 +1,4 @@
-import os
 import requests
-import argparse
 
 
 def check_image_exists(file_path, danbooru_url, api_key, username):
@@ -114,72 +112,147 @@ def create_pool(api_key, username, danbooru_url, pool_name, pool_ids):
         print(f"Response: {response.text}")
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Upload images to a Danbooru server.")
-    parser.add_argument("username", type=str, help="Your username")
-    parser.add_argument("api_key", type=str, help="API key for the Danbooru server")
-    parser.add_argument("danbooru_url", type=str, help="URL of the Danbooru server")
-    parser.add_argument(
-        "directory", type=str, help="Directory containing images to upload"
-    )
+def fetch_images_with_tag(tag, danbooru_url, api_key, username, limit=10, random=False):
+    url = f"{danbooru_url}/posts.json"
 
-    args = parser.parse_args()
+    params = {"tags": tag, "limit": limit, "login": username, "api_key": api_key}
 
-    # Bools and storage
-    generate_pool = False
-    pool_ids = []
+    if random:
+        params["tags"] = f"{tag} order:random"
 
-    # Get tags and rating from user
-    tags = input("Enter tags (space-separated): ")
-    rating = input("Enter rating (s for safe, q for questionable, e for explicit): ")
-    pool_name = input("Generate a pool? (My_Pool_Name): ")
-    generate_pool = len(pool_name) > 1
-
-    if generate_pool:
-        print(f"Will generate pool {pool_name}")
-    print("\n")
-
-    # Ensure rating is valid
-    if rating not in ["s", "q", "e"]:
+    response = requests.get(url, params=params)
+    if response.status_code == 200:
+        return response.json()
+    else:
         print(
-            "Invalid rating. Use 's' for safe, 'q' for questionable, 'e' for explicit."
+            f"Failed to fetch images with tag '{tag}'. Status code: {response.status_code}"
         )
-        exit(1)
+        print(f"Response: {response.text}")
+        return []
 
-    # List image files in the specified directory
-    image_extensions = (".jpg", ".jpeg", ".png", ".gif", ".webm", ".mp4")
-    image_files = [
-        f for f in os.listdir(args.directory) if f.lower().endswith(image_extensions)
-    ]
 
-    # Upload each image file and process it
-    for image_file in image_files:
-        file_path = os.path.join(args.directory, image_file)
-        upload_id = upload_image(
-            args.api_key,
-            args.username,
-            args.danbooru_url,
-            file_path,
+def tag_exists(tag, danbooru_url, api_key, username):
+    url = f"{danbooru_url}/tags.json"
+    params = {
+        "search[name_matches]": tag,
+        "limit": 1,
+        "login": username,
+        "api_key": api_key,
+    }
+    response = requests.get(url, params=params)
+    if response.status_code == 200:
+        tags = response.json()
+        if tags:
+            print(f"Tag '{tag}' exists on the server.")
+            return True
+        else:
+            print(f"Tag '{tag}' does not exist on the server.")
+            return False
+    else:
+        print(
+            f"Failed to check if tag '{tag}' exists. Status code: {response.status_code}"
         )
-        if upload_id:
-            post_id = create_post(
-                args.api_key,
-                args.username,
-                args.danbooru_url,
-                upload_id,  # Passed from prev command
-                tags,
-                rating,
-            )
-
-            if generate_pool:
-                pool_ids.append(post_id)
-
-    print("All images uploaded.")
-
-    if create_pool:
-        print("Generating pool...")
-        create_pool(args.api_key, args.username, args.danbooru_url, pool_name, pool_ids)
+        print(f"Response: {response.text}")
+        return False
 
 
-if __name__ == "__main__":
-    main()
+def get_post_tags(post_id, danbooru_url, api_key, username):
+    url = f"{danbooru_url}/posts/{post_id}.json"
+
+    # Get the current tags of the post
+    response = requests.get(url, auth=(username, api_key))
+    if response.status_code == 200:
+        post_data = response.json()
+        tags = post_data.get("tag_string", "").split()
+    else:
+        print(
+            f"Failed to fetch current tags for post {post_id}. Status code: {response.status_code}"
+        )
+        print(f"Response: {response.text}")
+        return None
+
+    return tags
+
+
+def append_post_tags(post_id, new_tags, danbooru_url, api_key, username, clear_tags=[]):
+    url = f"{danbooru_url}/posts/{post_id}.json"
+
+    # Get the current tags
+    current_tags = get_post_tags(post_id, danbooru_url, api_key, username)
+
+    # Ensure we can iterate the tags even if they're not a list
+    if not isinstance(new_tags, list):
+        new_tags = [new_tags]
+
+    # Combine current tags with new tags, avoiding duplicates
+    combined_tags = list(set(current_tags + new_tags))
+
+    # If there are any cleartags to remove, do so now
+    for tag in clear_tags:
+        try:
+            combined_tags.remove(tag)
+        except ValueError:
+            print(f"Could not clear {tag} from {combined_tags}")
+
+    headers = {
+        "Content-Type": "application/json",
+    }
+
+    data = {
+        "post": {"tag_string": " ".join(combined_tags)},
+        "login": username,
+        "api_key": api_key,
+    }
+
+    response = requests.put(url, json=data, headers=headers, auth=(username, api_key))
+    if response.status_code == 200:
+        print(f"Successfully updated tags for post {post_id}.")
+        return response.json()
+    else:
+        print(
+            f"Failed to update tags for post {post_id}. Status code: {response.status_code}"
+        )
+        print(f"Response: {response.text}")
+        return None
+
+
+def fetch_new_comments(danbooru_url, api_key, username, last_comment_id):
+    url = f"{danbooru_url}/comments.json"
+    params = {
+        "search[id_gte]": int(last_comment_id) + 1,
+        "login": username,
+        "api_key": api_key,
+        "limit": 100,
+    }
+    response = requests.get(url, params=params)
+
+    filtered_response = []
+
+    # No easy way (i think) to filter these so... here we go :3
+    for comment in response.json():
+        if int(comment["id"]) > int(last_comment_id):
+            filtered_response.append(comment)
+
+    if response.status_code == 200:
+        return filtered_response
+    else:
+        print(f"Failed to fetch new comments. Status code: {response.status_code}")
+        print(f"Response: {response.text}")
+        return []
+
+
+def get_username(danbooru_url, api_key, username, user_id):
+    url = f"{danbooru_url}/users/{user_id}.json"
+    response = requests.get(url, auth=(username, api_key))
+
+    if response.status_code == 200:
+        user_data = response.json()
+        user_name = user_data.get("name", "")
+        print(f"User ID {user_id} corresponds to username '{user_name}'.")
+        return user_name
+    else:
+        print(
+            f"Failed to fetch username for user ID {user_id}. Status code: {response.status_code}"
+        )
+        print(f"Response: {response.text}")
+        return None

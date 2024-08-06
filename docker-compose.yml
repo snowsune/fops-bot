@@ -1,27 +1,47 @@
-version: '3.7'
+version: "3.7"
 
 services:
   db:
     image: postgres:10.5
-    restart: always
+    restart: "no"
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
       - POSTGRES_DB=fops_bot_db
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     logging:
       options:
         max-size: 10m
         max-file: "3"
     ports:
-      - '5438:5432'
+      - "5438:5432"
     tmpfs: /var/lib/postgresql/data
 
   fops_bot:
     image: fops_bot:$TAG
+    depends_on:
+      db:
+        condition: service_healthy
     build:
       context: .
       dockerfile: Dockerfile
     environment:
-      BOT_TOKEN: "top.secret.token"
+      TZ: America/New_York
+      BOT_TOKEN: "secret"
+      NCTOKEN: "secret"
+      PFSENSE_URL: "https://my.ip.he.re"
+      PFSENSE_USER: "user"
+      PFSENSE_PASSWORD: "passwd"
+      ALERT_CHAN_ID: 000000000000000000
+      WEATHER_CHAN_ID: 000000000000000000
+      HOLES: "000000000000000000,000000000000000000;"
+      BOORU_KEY: "secret"
+      BOORU_USER: "user"
+      BOORU_URL: "https://booru.mydomain.net"
+      BOORU_AUTO_UPLOAD: "000000000000000000, 000000000000000000"
     restart: "no"
     command: "true"

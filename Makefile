@@ -1,75 +1,45 @@
-.PHONY: help clean clean-pyc clean-build list test coverage release
+.PHONY: help
 
-# Help
-help:
-	@echo "  clean-build -          Remove build artifacts"
-	@echo "  clean-pyc -            Remove Python file artifacts"
-	@echo "  lint -                 Check style with flake8"
-	@echo "  test -                 Run tests quickly with the default Python"
-	@echo "  install-requirements - install the requirements for development"
-	@echo "  build                  Builds the docker images for the docker-compose setup"
-	@echo "  docker-rm              Stops and removes all docker containers"
-	@echo "  run                    Run a command. Can run scripts, e.g. make run COMMAND=\"./scripts/schema_generator.sh\""
-	@echo "  shell                  Opens a Bash shell"
-	@echo "  prod					Is meant for running on the production env"
+help:   ## Prints this help message
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
 
-# Clean everything
-clean: clean-build clean-pyc docker-rm
-
-# Clean build data
-clean-build:
-	rm -fr build/
-	rm -fr dist/
-	rm -fr *.egg-info
-
-# Clean python cache
-clean-pyc:
+clean-pyc:  ## Clean python cache
 	find . -name '*.pyc' -exec rm -f {} +
 	find . -name '*.pyo' -exec rm -f {} +
 	find . -name '*~' -exec rm -f {} +
 
-# Delint the code
-lint:
+lint: ## Delint the code
 	flake8 .
 
-# Run the tests
-test: build
+test: build ## Run the tests
 	docker-compose run fops_bot test
 
-# Install requirements (locally)
-install-requirements:
+install-requirements: ## Install requirements (locally)
 	pip install -r requirements/requirements.txt
 	pip install -r requirements/test_requirements.txt
 
-# Build container locally
-build:
+build: ## Build container locally
 	# Generate tag
 	echo TAG=$(shell git rev-parse --abbrev-ref HEAD | sed 's/[^a-zA-Z0-9]/-/g') >> .env
 
 	# Build
 	docker-compose build --build-arg GIT_COMMIT=$(shell git describe --abbrev=8 --always --tags --dirty) --build-arg DEBUG=True
 
-# Delete container
-docker-rm: stop
+docker-rm: stop ## Delete container
 	docker-compose rm -f
 
-# Get container shell
-shell:
+shell: ## Get container shell
 	docker-compose run --entrypoint "/bin/bash" fops_bot
 
-# Run command in container
-run: build
+run: build ## Run command in container
 	docker-compose run fops_bot $(COMMAND)
 
-# Stop container
-stop:
+stop: ## Stop container
 	docker-compose down
 	docker-compose stop
 
-# "production"
-prod:
-	docker-compose -f docker-compose-prod.yml up -d
+dev:  ## Make everything you need to dev in the background
+	docker-compose -f docker-compose.yml up db pgadmin
 
-# Development stuff
-dev:
-	docker-compose -f docker-compose-prod.yml up
+quick: build  ## Make just what you need to quick-test
+	docker-compose -f docker-compose.yml up fops_bot

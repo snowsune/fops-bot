@@ -1,5 +1,8 @@
 discord.py
+discordhealthcheck
 requests
 lxml
 pytz
 python_weather
+pyyaml
+psycopg[binary]

@@ -4,14 +4,20 @@
 
 import os
 import sys
+import asyncio
 import logging
 import random
 
+import discordhealthcheck
+
+import discord
 from discord import Intents
 from discord.ext import commands
 
+from .utilities.database import init_db
 
-class FopsBot(object):
+
+class FopsBot:
     def __init__(self):
         # Intents (new iirc)
         intents = Intents(messages=True, guilds=True)
@@ -47,8 +53,9 @@ class FopsBot(object):
         # Append some extra information to our discord bot
         self.bot.version = self.version  # Package version with bot
 
-    async def on_ready(self):
+    async def load_cogs(self):
         # Cog Loader!
+        logging.info("Loading cogs...")
         for filename in os.listdir(self.workdir + "cogs"):
             logging.info(f"Found file {filename}, loading as extension.")
             if filename.endswith(".py"):
@@ -56,6 +63,25 @@ class FopsBot(object):
                     await self.bot.load_extension(f"cogs.{filename[:-3]}")
                 except Exception as e:
                     logging.fatal(f"Error loading {filename} as a cog, error: {e}")
+        logging.info("Done loading cogs")
+
+    async def on_ready(self):
+        # Start health monitoring
+        logging.info(
+            "Preparing external monitoring (using discordhealthcheck https://pypi.org/project/discordhealthcheck/)"
+        )
+        self.healthcheck_server = await discordhealthcheck.start(self.bot)
+        logging.info("Done prepping external monitoring")
+
+        # DB Setup
+        try:
+            logging.info("Configuring DB")
+            self.bot.dbReady = init_db()
+        except Exception as e:
+            logging.error(f"Could not configure the DB! Error was {e}")
+            self.bot.dbReady = False
+        finally:
+            logging.info("Done configuring DB")
 
         await self.bot.tree.sync()
 
@@ -63,8 +89,14 @@ class FopsBot(object):
         # hehe, sneaky every time
         logging.info(ctx)
 
-    def run(self):
-        logging.info(f"using version {self.version}")
+    async def start_bot(self):
+        logging.info(f"Using version {self.version}")
+
+        # Begin the cog loader
+        await self.load_cogs()
 
         # Run the discord bot using our token.
-        self.bot.run(str(os.environ.get("BOT_TOKEN")))
+        await self.bot.start(str(os.environ.get("BOT_TOKEN")))
+
+    def run(self):
+        asyncio.run(self.start_bot())
