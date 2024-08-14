@@ -147,6 +147,70 @@ class YTDLP(commands.Cog, name="ytdlp"):
         # Remove the output directory
         os.rmdir(output_dir)
 
+    @commands.Cog.listener("on_message")
+    async def twitterListener(self, message: discord.Message):
+        """
+        Twitter/x
+        """
+
+        canonical_url = "x.com"
+
+        # Only care about these matches
+        if not message_contains(
+            message, [canonical_url, "fixupx.com", "fxtwitter.com"]
+        ):
+            return
+
+        logging.info(f"Twitter Listener processing {message}")
+
+        # Extract the URL
+        url = None
+        for word in message.content.split():
+            if canonical_url in word:
+                url = word
+                break
+
+        if not url:
+            logging.warn(
+                f'Found {canonical_url} in message "{message}"but could not extract url'
+            )
+            return  # No valid URL found
+
+        # Define output directory
+        output_dir = "/tmp/ytdlp_output"
+        os.makedirs(output_dir, exist_ok=True)
+
+        # Execute yt-dlp with the URL
+        try:
+            command = [
+                "yt-dlp",
+                url,
+                "-o",
+                os.path.join(output_dir, "%(title)s.%(ext)s"),
+            ]
+            subprocess.run(command, check=True)
+        except subprocess.CalledProcessError as e:
+            logging.error(f"yt-dlp failed: {e}")
+            return
+
+        # Find the video or image file it produced
+        files = os.listdir(output_dir)
+        if not files:
+            logging.error("No files found in output directory")
+            return
+
+        # Assume the first file is the desired one (could add logic to choose based on extension)
+        file_path = os.path.join(output_dir, files[0])
+
+        # Send the image or video file back to the channel
+        if os.path.isfile(file_path):
+            await message.channel.send(file=discord.File(file_path))
+            # Clean up
+            os.remove(file_path)
+
+        # Remove the output directory
+        os.rmdir(output_dir)
+
 
 async def setup(bot):
     await bot.add_cog(YTDLP(bot))
