@@ -189,9 +189,7 @@ class BackgroundBooru(commands.Cog):
             random=True,
         )[0]
 
-        post_url = (
-            f"{r_post['id']}\n\n{os.environ.get('BOORU_URL', '')}/posts/{r_post['id']}"
-        )
+        post_url = f"{os.environ.get('BOORU_URL', '')}/posts/{r_post['id']}"
         image_url = booru_scripts.get_image_url(
             r_post["id"],
             self.api_url,
@@ -235,6 +233,8 @@ class BackgroundBooru(commands.Cog):
                     if results[0].urls
                     else "No source found (checked with SauceNAO)"
                 )
+
+                author = author.replace(" ", "_")
 
                 return {"author": author, "source": source}
         except SauceNaoApiError as e:
