@@ -131,7 +131,7 @@ class BackgroundBooru(commands.Cog):
 
         return real_tags
 
-    @tasks.loop(minutes=30)
+    @tasks.loop(minutes=10)
     async def update_status(self):
         channel = self.bot.get_channel(
             int(os.environ.get("BOORU_MAINTENANCE", "00000000000"))
@@ -159,7 +159,7 @@ class BackgroundBooru(commands.Cog):
             f"{r_post['id']}\n\n{os.environ.get('BOORU_URL', '')}/posts/{r_post['id']}"
         )
 
-        logging.info("waiting 30 minutes to post next tagme...")
+        logging.info("waiting 10 minutes to post next tagme...")
 
     @tasks.loop(seconds=30)
     async def check_new_comments(self):

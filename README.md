@@ -33,3 +33,14 @@ Thank you <@257599292343058433> for reporting this bug.
 
 Fixed in {{version}}
 - Deregistering will immediately kick your seat from the queue
+
+
+## Changelog 4
+
+Hole improvements~
+
+Fixed in {{version}}
+- Users registered for the hole cannot be picked twice in a row
+- Bot is more helpful when giving errors on registration
+- Bot is less spammy
+- Booru maintenance bumped to a 10m interval

@@ -213,7 +213,6 @@ class HolesCog(commands.Cog, name="HolesCog"):
             wait = seconds_until(7, 00)  # Wait here till 7am
             await asyncio.sleep(wait)
 
-        # Cycle user
         logging.info(
             f"{self.qualified_name}: Cycling user",
         )
@@ -226,10 +225,31 @@ class HolesCog(commands.Cog, name="HolesCog"):
                 if u[0] == server_config["guild_id"]
                 and u[1] == server_config["chan_id"]
             ]
-            if not guild_users:
-                continue
 
-            user = random.choice(guild_users)
+            if len(guild_users) == 0:
+                logging.warn(f"No users to pick from for {server_config['guild_id']}")
+                return
+
+            # if len(guild_users) <= 1:
+            #     chan_id = int(server_config["chan_id"])
+            #     channel = self.bot.get_channel(chan_id)
+            #     if channel:
+            #         await channel.send("Use the /register command to get in the queue!")
+            #     continue
+
+            previous_user_id = retrieve_key(
+                f"{self.base_hole_user_key}_{server_config['guild_id']}",
+                self.default_id,
+            )
+
+            # Filter out the previous user to avoid picking them again
+            eligible_users = [u for u in guild_users if u[2] != previous_user_id]
+            if not eligible_users:
+                eligible_users = (
+                    guild_users  # If the only eligible user was the previous one, reset
+                )
+
+            user = random.choice(eligible_users)
             user_id, fluff = user[2], user[3]
 
             # Update db
@@ -269,15 +289,16 @@ class HolesCog(commands.Cog, name="HolesCog"):
     )
     @app_commands.describe(fluff="A little sneak to display when you're chosen~")
     async def register(self, interaction: discord.Interaction, fluff: str):
-        guild_id = str(interaction.guild.id)
-        chan_id = str(interaction.channel.id)
-        user_id = str(interaction.user.id)
-
         if isinstance(interaction.channel, discord.channel.DMChannel):
+            logging.warning(f"{interaction.user} tried to use /register in a PM")
             await interaction.response.send_message(
                 "Must use in a guild!", ephemeral=True
             )
             return
+
+        guild_id = str(interaction.guild.id)
+        chan_id = str(interaction.channel.id)
+        user_id = str(interaction.user.id)
 
         cur, conn = getCur()
         cur.execute(
