@@ -24,7 +24,7 @@ RUN pip install --upgrade pip --no-cache-dir
 WORKDIR ${HOME}
 
 # Add any packages we need
-RUN apt update && apt install python-dev-is-python3 ffmpeg -y
+RUN apt update && apt install python-dev-is-python3 ffmpeg curl -y
 
 # Copy in all requirements
 ADD requirements requirements/
@@ -38,6 +38,11 @@ RUN pip install -r requirements/test_requirements.txt --no-cache-dir
 ADD . ${HOME}
 # Add /bin to path
 ENV PATH $PATH:${HOME}/bin
+
+# Install yt-dlp
+RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o ${HOME}/bin/yt-dlp
+RUN chmod a+rx ${HOME}/bin/yt-dlp
+RUN yt-dlp -U
 
 # Install our app in edit mode using pip
 RUN pip install -e ${HOME} --no-cache-dir

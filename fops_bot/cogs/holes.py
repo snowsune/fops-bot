@@ -60,6 +60,9 @@ class HolesCog(commands.Cog, name="HolesCog"):
 
     @commands.Cog.listener("on_message")
     async def holeInTheWallListener(self, msg: discord.Message):
+        if msg.author.bot:
+            return
+
         logging.debug(f"Hole In the wall got {msg}")
 
         # Shush of OOC
@@ -287,7 +290,7 @@ class HolesCog(commands.Cog, name="HolesCog"):
         name="register",
         description="Register for the random-hole in this guild! (You'll be chosen randomly~)",
     )
-    @app_commands.describe(fluff="A little sneak to display when you're chosen~")
+    @app_commands.describe(fluff="Your Intro Message!")
     async def register(self, interaction: discord.Interaction, fluff: str):
         if isinstance(interaction.channel, discord.channel.DMChannel):
             logging.warning(f"{interaction.user} tried to use /register in a PM")

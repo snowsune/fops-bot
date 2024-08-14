@@ -140,6 +140,9 @@ class Grab(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message):
+        if message.author.bot:
+            return
+
         # Check if the message has exactly one attachment and is an image
         if len(message.attachments) == 0:
             logging.debug(

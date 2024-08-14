@@ -44,3 +44,13 @@ Fixed in {{version}}
 - Bot is more helpful when giving errors on registration
 - Bot is less spammy
 - Booru maintenance bumped to a 10m interval
+
+
+## Changelog 5
+
+New features!
+- instagram supported by the DLP cog! (new cog, just made it~ its epic, you'll see!)
+- Facebook also supported~ Will try and do tiktok too but i dont use tiktok so, will have to see how that goes
+
+Fixes in {{version}}
+- Fixed the `fluff` text in `/register` (thank you <@257599292343058433>!)
