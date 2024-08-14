@@ -22,7 +22,7 @@ jobs:
         with:
           fetch-depth: 1
       - name: Test the bot image
-        run: docker-compose -f docker-compose-prod.yml run fops_bot test
+        run: docker compose -f docker-compose.yml run fops_bot test
       - name: Discord notification
         if: ${{ failure() }}
         env:

@@ -205,7 +205,7 @@ class BackgroundBooru(commands.Cog):
         if sauce_info.get("source") is not None:
             author = sauce_info.get("author")
             source = sauce_info.get("source")
-            message += f"\n\nFound author and source `author:{author} source:{source}` via SauceNAO."
+            message += f"\n\nFound author and source `art:{author} source:{source}` via SauceNAO."
 
         await channel.send(message)
 
