@@ -3,15 +3,21 @@
 # MIT License
 
 import os
+import imp
 import discord
 import logging
 import aiohttp
+
 from datetime import datetime
 from typing import Literal, Optional
 from discord import app_commands
 from discord.ext import commands, tasks
+
+from saucenao_api import SauceNao
+from saucenao_api.errors import SauceNaoApiError
+
 from utilities.database import retrieve_key, store_key
-import imp
+
 
 booru_scripts = imp.load_source("booru_scripts", "fops_bot/scripts/danbooru-scripts.py")
 
@@ -24,6 +30,10 @@ class BackgroundBooru(commands.Cog):
         self.api_key = os.environ.get("BOORU_KEY", "")
         self.api_user = os.environ.get("BOORU_USER", "")
         self.api_url = os.environ.get("BOORU_URL", "")
+
+        # Configure saucenao
+        self.sauce_api_key = os.environ.get("SAUCENAO_API_KEY", "")
+        self.sauce = SauceNao(api_key=self.sauce_api_key)
 
     @commands.Cog.listener()
     async def on_ready(self):
@@ -70,11 +80,32 @@ class BackgroundBooru(commands.Cog):
                 return  # Invalid post ID format
 
             # Extract tags from the user's reply
-            tags = message.content.split()
+            tags = message.content.split(" ")
             applied_tags = await self.append_tags(post_id, tags)
 
             # Thanks!
             await message.add_reaction("🙏")
+
+            # Check if source was provided
+            source_url = None
+            for tag in tags:
+                if tag.startswith("source:"):
+                    source_url = tag.split(":", 1)[
+                        1
+                    ]  # Get the URL part after "source:"
+
+            if source_url:
+                booru_scripts.append_source_to_post(
+                    post_id,
+                    source_url.strip(),
+                    self.api_url,
+                    self.api_key,
+                    self.api_user,
+                )
+                logging.info(f"Source URL {source_url} appended to post {post_id}")
+                await message.add_reaction(
+                    "🔗"
+                )  # React with a link emoji to indicate the source was added
 
             # No tagme? yayy
             if "tagme" not in booru_scripts.get_post_tags(
@@ -89,11 +120,14 @@ class BackgroundBooru(commands.Cog):
         real_tags = []
 
         for tag in tags:
-            if booru_scripts.tag_exists(
-                tag,
-                self.api_url,
-                self.api_key,
-                self.api_user,
+            if (
+                booru_scripts.tag_exists(
+                    tag,
+                    self.api_url,
+                    self.api_key,
+                    self.api_user,
+                )
+                or "art:" in tag
             ):
                 real_tags.append(tag)
 
@@ -155,11 +189,61 @@ class BackgroundBooru(commands.Cog):
             random=True,
         )[0]
 
-        await channel.send(
+        post_url = (
             f"{r_post['id']}\n\n{os.environ.get('BOORU_URL', '')}/posts/{r_post['id']}"
         )
+        image_url = booru_scripts.get_image_url(
+            r_post["id"],
+            self.api_url,
+            self.api_key,
+            self.api_user,
+        )
+
+        # Send image URL to SauceNAO and retrieve author/source information
+        sauce_info = await self.get_sauce_info(channel, image_url)
+
+        # Format the message with SauceNAO info
+        message = f"{r_post['id']}\n\n{post_url}"
+        if sauce_info.get("source") is not None:
+            author = sauce_info.get("author")
+            source = sauce_info.get("source")
+            message += (
+                f"\n\nFound author '{author}' and source '{source}' via SauceNAO."
+            )
+
+        await channel.send(message)
 
         logging.info("waiting 10 minutes to post next tagme...")
+
+    async def get_sauce_info(self, channel, image_url):
+        """Retrieve author and source information from SauceNAO."""
+
+        # Send image to SauceNAO
+        try:
+            results = self.sauce.from_url(image_url)
+            if results:
+                # Exit early if nothing is similar
+                if results[0].similarity < 80:
+                    return {"author": None, "source": None}
+
+                # Pluck author and source
+                author = (
+                    results[0].author
+                    if results[0].author
+                    else "Unknown (checked with SauceNAO)"
+                )
+                source = (
+                    results[0].urls[0]
+                    if results[0].urls
+                    else "No source found (checked with SauceNAO)"
+                )
+
+                return {"author": author, "source": source}
+        except SauceNaoApiError as e:
+            logging.error(f"SauceNAO error: {str(e)}")
+            await channel.send(f"Error occurred while using SauceNAO. Error was {e}")
+
+        return {"author": None, "source": None}
 
     @tasks.loop(seconds=30)
     async def check_new_comments(self):

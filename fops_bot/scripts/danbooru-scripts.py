@@ -256,3 +256,67 @@ def get_username(danbooru_url, api_key, username, user_id):
         )
         print(f"Response: {response.text}")
         return None
+
+
+def get_image_url(post_id, danbooru_url, api_key, username):
+    url = f"{danbooru_url}/posts/{post_id}.json"
+
+    # Fetch the post details
+    response = requests.get(url, auth=(username, api_key))
+    if response.status_code == 200:
+        post_data = response.json()
+        file_url = post_data.get("file_url", "")
+        if file_url:
+            print(f"Image URL for post ID {post_id} is {file_url}")
+            return file_url
+        else:
+            print(f"No file URL found for post ID {post_id}.")
+            return None
+    else:
+        print(
+            f"Failed to fetch post details for ID {post_id}. Status code: {response.status_code}"
+        )
+        print(f"Response: {response.text}")
+        return None
+
+
+def append_source_to_post(post_id, source_url, danbooru_url, api_key, username):
+    url = f"{danbooru_url}/posts/{post_id}.json"
+
+    # Get current post data
+    response = requests.get(url, auth=(username, api_key))
+
+    if response.status_code == 200:
+        post_data = response.json()
+        current_source = post_data.get("source", "")
+
+        # If the post already has a source, we can append the new one, separated by a newline or any other delimiter
+        if current_source:
+            updated_source = f"{current_source}\n{source_url}"
+        else:
+            updated_source = source_url
+
+        data = {"post": {"source": updated_source}}
+
+        headers = {
+            "Content-Type": "application/json",
+        }
+
+        # Update the post with the new source
+        update_response = requests.put(
+            url, json=data, headers=headers, auth=(username, api_key)
+        )
+
+        if update_response.status_code == 200:
+            print(f"Successfully updated source for post {post_id}.")
+            return update_response.json()
+        else:
+            print(
+                f"Failed to update source for post {post_id}. Status code: {update_response.status_code}"
+            )
+            print(f"Response: {update_response.text}")
+            return None
+    else:
+        print(f"Failed to fetch post {post_id}. Status code: {response.status_code}")
+        print(f"Response: {response.text}")
+        return None
