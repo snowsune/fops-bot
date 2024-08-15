@@ -288,6 +288,39 @@ class Grab(commands.Cog):
     async def before_update_status(self):
         await self.bot.wait_until_ready()
 
+    @app_commands.command(
+        name="random",
+        description="Grab a random image with space-separated tags!",
+    )
+    @app_commands.describe(tags="Like `cute canine outdoors`")
+    async def random(self, interaction: discord.Interaction, tags: str):
+        # Default tags to exclude unless explicitly included
+        default_exclude = ["vore", "gore", "scat", "watersports", "loli", "shota"]
+
+        # Check if any of the default exclude tags are included in the user's tags
+        included_excludes = [tag for tag in default_exclude if tag in tags.split()]
+
+        # Exclude the default tags that are not explicitly included
+        exclude_tags = [tag for tag in default_exclude if tag not in included_excludes]
+
+        image = booru_scripts.fetch_images_with_tag(
+            tags,
+            self.api_url,
+            self.api_key,
+            self.api_user,
+            limit=1,
+            random=True,
+            exclude=exclude_tags,  # Pass the exclude tags
+        )
+
+        if not image:
+            await interaction.response.send_message(f"No match for `{tags}`!")
+            return
+
+        await interaction.response.send_message(
+            f"{os.environ.get('BOORU_URL', '')}/posts/{image[0]['id']}"
+        )
+
 
 async def setup(bot):
     await bot.add_cog(Grab(bot))

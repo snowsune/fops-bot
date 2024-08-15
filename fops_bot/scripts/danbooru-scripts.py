@@ -112,15 +112,25 @@ def create_pool(api_key, username, danbooru_url, pool_name, pool_ids):
         print(f"Response: {response.text}")
 
 
-def fetch_images_with_tag(tag, danbooru_url, api_key, username, limit=10, random=False):
+def fetch_images_with_tag(
+    tag, danbooru_url, api_key, username, limit=10, random=False, exclude=None
+):
     url = f"{danbooru_url}/posts.json"
 
+    # Base tags to include
     params = {"tags": tag, "limit": limit, "login": username, "api_key": api_key}
 
+    # Add random ordering if requested
     if random:
-        params["tags"] = f"{tag} order:random"
+        params["tags"] = f"{params['tags']} order:random"
+
+    # Add excluded tags if any
+    if exclude:
+        exclude_tags = " ".join([f"-{ex}" for ex in exclude])
+        params["tags"] = f"{params['tags']} {exclude_tags}"
 
     response = requests.get(url, params=params)
+
     if response.status_code == 200:
         return response.json()
     else:

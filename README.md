@@ -60,3 +60,8 @@ Fixes in {{version}}
 
 Fixes in {{version}}
 - DLP cog now supports twitter/x/fixy
+
+
+## Changelog 7
+
+New command! `/random <tags>` will snatch a random matching post from the booru server~
