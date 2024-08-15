@@ -54,3 +54,9 @@ New features!
 
 Fixes in {{version}}
 - Fixed the `fluff` text in `/register` (thank you <@257599292343058433>!)
+
+
+## Changelog 6
+
+Fixes in {{version}}
+- DLP cog now supports twitter/x/fixy
