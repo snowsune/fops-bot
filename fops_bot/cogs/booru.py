@@ -148,11 +148,6 @@ class Grab(commands.Cog):
             logging.debug(
                 "No attachments!?? Vixi! DONT FORGOR: Must add discord check here!"
             )
-
-            # Embed check
-            # Before
-            # Returning!
-
             return
 
         if len(message.attachments) > 1:
@@ -204,6 +199,9 @@ class Grab(commands.Cog):
                 )
                 return
 
+            # Prepare the description with user and channel information
+            description = f"Uploaded by {message.author} in channel {message.channel}"
+
             # TODO: Move to shared func
             tags = "tagme discord_archive"
             rating = "e"
@@ -223,6 +221,7 @@ class Grab(commands.Cog):
                     upload_id,  # Passed from prev command
                     tags,
                     rating,
+                    description=description,  # Pass the description here
                 )
 
                 post_id_str = str(post_id)
