@@ -353,3 +353,37 @@ def fetch_usernames(danbooru_url, api_key, username, limit=10):
         print(f"Failed to fetch usernames. Status code: {response.status_code}")
         print(f"Response: {response.text}")
         return []
+
+
+def fetch_usernames_with_favs(danbooru_url, api_key, username, limit=10):
+    url = f"{danbooru_url}/users.json"
+    params = {
+        "limit": limit,
+        "login": username,
+        "api_key": api_key,
+    }
+
+    response = requests.get(url, params=params)
+    if response.status_code != 200:
+        print(f"Failed to fetch usernames. Status code: {response.status_code}")
+        print(f"Response: {response.text}")
+        return []
+
+    users = response.json()
+    users_with_favs = []
+
+    for user in users:
+        user_name = user["name"]
+        favs_url = f"{danbooru_url}/posts.json"
+        favs_params = {
+            "tags": f"ordfav:{user_name}",
+            "limit": 1,  # Just check if there's at least one favorite
+            "login": username,
+            "api_key": api_key,
+        }
+
+        favs_response = requests.get(favs_url, params=favs_params)
+        if favs_response.status_code == 200 and favs_response.json():
+            users_with_favs.append(user_name)
+
+    return users_with_favs

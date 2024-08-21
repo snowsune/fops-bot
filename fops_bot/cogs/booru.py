@@ -82,9 +82,12 @@ class TagModal(discord.ui.Modal, title="Enter Tags"):
             #     )
 
 
-class Grab(commands.Cog):
+class Booru(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+
+        # For /fav command
+        self.users_with_favs = ["Wait for bot to start..."]
 
         #
         self.ctx_menu = app_commands.ContextMenu(
@@ -104,12 +107,11 @@ class Grab(commands.Cog):
 
     @commands.Cog.listener()
     async def on_ready(self):
-        # Tasks
-        self.update_status.start()
-
-    @commands.Cog.listener()
-    async def on_ready(self):
+        # Commands
         await self.bot.tree.sync()
+
+        # Tasks
+        self.fetch_usernames_with_favs.start()
 
     async def grab_message_context(
         self, interaction: discord.Interaction, message: discord.Message
@@ -283,10 +285,6 @@ class Grab(commands.Cog):
                 activity=discord.Game(name=f"Running Version {self.bot.version}")
             )
 
-    @update_status.before_loop
-    async def before_update_status(self):
-        await self.bot.wait_until_ready()
-
     @app_commands.command(
         name="random",
         description="Grab a random image with space-separated tags!",
@@ -321,36 +319,39 @@ class Grab(commands.Cog):
             f"{os.environ.get('BOORU_URL', '')}/posts/{image[0]['id']}?q={'+'.join(tags.split(' '))}"
         )
 
+    @tasks.loop(minutes=15)
+    async def fetch_usernames_with_favs(self):
+        logging.info("Fetching usernames with favs...")
+        self.users_with_favs = booru_scripts.fetch_usernames_with_favs(
+            self.api_url, self.api_key, self.api_user
+        )
+        logging.info(f"Fetched {len(self.users_with_favs)} users with favs")
+
     # User autocompletion, useful for some things!
     async def user_autocomplete(
         self, interaction: discord.Interaction, current: str
     ) -> list[app_commands.Choice[str]]:
-        usernames = booru_scripts.fetch_usernames(
-            self.api_url, self.api_key, self.api_user
-        )
-
-        # Filter usernames based on what the user has typed
-        matching_usernames = [
-            name for name in usernames if current.lower() in name.lower()
-        ]
 
         return [
-            app_commands.Choice(name=username, value=username)
-            for username in matching_usernames
+            app_commands.Choice(name=_name, value=_name)
+            for _name in self.users_with_favs
         ][:25]
         # Discord limits to 25 choices
 
     @app_commands.command(
         name="fav",
-        description="Grab a favorite from a user's fav list~ ",
+        description="Grab a favorite post from a user's fav list! Use the `tags` to filter!",
     )
     @app_commands.describe(tags="Like `vulpine outdoors`")
+    @app_commands.describe(
+        user="If you dont see your name listed, try favoriting something and waiting 15 minutes!`"
+    )
     @app_commands.autocomplete(user=user_autocomplete)
     async def fav_random(
         self,
         interaction: discord.Interaction,
+        user: str,
         tags: str = "",
-        user: str = "Vixi",
     ):
         # Default tags to exclude unless explicitly included
         default_exclude = ["vore", "gore", "scat", "watersports", "loli", "shota"]
@@ -384,7 +385,7 @@ class Grab(commands.Cog):
 
 
 async def setup(bot):
-    await bot.add_cog(Grab(bot))
+    await bot.add_cog(Booru(bot))
 
     # for cmd in bot.tree.get_commands():
     #     print(f"Command available: {cmd.name}")

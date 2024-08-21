@@ -71,3 +71,11 @@ New command! `/random <tags>` will snatch a random matching post from the booru 
 
 New command `/fav <user=vixi> <tags="">` That will let you get the most recent matching favorite
 from your favorite users~
+
+## Changelog 9
+
+Sorry I don't always explain how everything works when I add it~ If you wanna preview more stuff pick
+up the <@&1248737660315635754> Role!
+
+Fixes in {{version}}
+ - Added better help-text to `/fav` thank you Tyro and Fortune ,3
