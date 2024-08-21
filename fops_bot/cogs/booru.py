@@ -316,8 +316,9 @@ class Grab(commands.Cog):
             await interaction.response.send_message(f"No match for `{tags}`!")
             return
 
+        # Yeah i know the join and split tags thing is messy but go for it XD
         await interaction.response.send_message(
-            f"{os.environ.get('BOORU_URL', '')}/posts/{image[0]['id']}"
+            f"{os.environ.get('BOORU_URL', '')}/posts/{image[0]['id']}?q={'+'.join(tags.split(' '))}"
         )
 
 
