@@ -79,3 +79,9 @@ up the <@&1248737660315635754> Role!
 
 Fixes in {{version}}
  - Added better help-text to `/fav` thank you Tyro and Fortune ,3
+
+
+## Changelog 10
+
+Fixes in {{version}}
+ - In-progress commands will no longer be available to users without `Beta Tester` role

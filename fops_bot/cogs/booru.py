@@ -346,8 +346,9 @@ class Booru(commands.Cog):
     @app_commands.describe(
         user="If you dont see your name listed, try favoriting something and waiting 15 minutes!`"
     )
+    @app_commands.checks.has_role("Beta Tester")
     @app_commands.autocomplete(user=user_autocomplete)
-    async def fav_random(
+    async def fav(
         self,
         interaction: discord.Interaction,
         user: str,
@@ -382,6 +383,13 @@ class Booru(commands.Cog):
         await interaction.response.send_message(
             f"{os.environ.get('BOORU_URL', '')}/posts/{image[0]['id']}?q={'+'.join(tags.split(' '))}"
         )
+
+    # @say.error
+    # async def say_error(ctx, error):
+    #     if isinstance(error, commands.MissingRole):
+    #         await ctx.send(f"`You dont have {error.missing_role} role..")
+    #     else:
+    #         raise error  # if we can't handle the error, bubble it back up
 
 
 async def setup(bot):

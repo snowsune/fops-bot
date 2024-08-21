@@ -11,10 +11,32 @@ import random
 import discordhealthcheck
 
 import discord
-from discord import Intents
+from discord import Intents, app_commands
 from discord.ext import commands
 
 from .utilities.database import init_db
+
+
+async def on_tree_error(
+    interaction: discord.Interaction, error: app_commands.AppCommandError
+):
+    if isinstance(error, app_commands.CommandOnCooldown):
+        return await interaction.response.send_message(
+            f"Command is currently on cooldown! Try again in **{error.retry_after:.2f}** seconds!",
+            ephemeral=True,
+        )
+    elif isinstance(error, app_commands.MissingPermissions):
+        return await interaction.response.send_message(
+            f"You're missing permissions to use that",
+            ephemeral=True,
+        )
+    elif isinstance(error, app_commands.MissingRole):
+        return await interaction.response.send_message(
+            f"You need the {error.missing_role} role to use this command!",
+            ephemeral=True,
+        )
+    else:
+        raise error
 
 
 class FopsBot:
@@ -32,6 +54,9 @@ class FopsBot:
         # Register python commands
         self.bot.on_ready = self.on_ready
         # self.bot.on_message = self.on_message
+
+        # Register our error handler
+        self.bot.tree.on_error = on_tree_error
 
         # Get the build commit that the code was built with.
         self.version = str(os.environ.get("GIT_COMMIT"))  # Currently running version

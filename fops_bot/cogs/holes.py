@@ -290,6 +290,7 @@ class HolesCog(commands.Cog, name="HolesCog"):
         name="register",
         description="Register for the random-hole in this guild! (You'll be chosen randomly~)",
     )
+    @app_commands.checks.has_role("Beta Tester")
     @app_commands.describe(fluff="Your Intro Message!")
     async def register(self, interaction: discord.Interaction, fluff: str):
         if isinstance(interaction.channel, discord.channel.DMChannel):
