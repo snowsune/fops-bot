@@ -4,6 +4,7 @@
 
 import os
 import imp
+import random
 import discord
 import logging
 import requests
@@ -366,22 +367,28 @@ class Booru(commands.Cog):
         # Prepend 'ordfav:vixi' to the tags to search within your favorites
         tags = f"ordfav:{user} {tags}"
 
-        image = booru_scripts.fetch_images_with_tag(
+        images = booru_scripts.fetch_images_with_tag(
             tags,
             self.api_url,
             self.api_key,
             self.api_user,
-            limit=1,
+            limit=100,
             random=False,
             exclude=exclude_tags,  # Pass the exclude tags
         )
 
-        if not image:
+        if not images:
             await interaction.response.send_message(f"No match for `{tags}`!")
             return
 
+        # Randomize the list of fetched images
+        random.shuffle(images)
+
+        # Pick the first random image
+        selected_image = images[0]
+
         await interaction.response.send_message(
-            f"{os.environ.get('BOORU_URL', '')}/posts/{image[0]['id']}?q={'+'.join(tags.split(' '))}"
+            f"{os.environ.get('BOORU_URL', '')}/posts/{selected_image['id']}?q={'+'.join(tags.split(' '))}"
         )
 
     # @say.error
