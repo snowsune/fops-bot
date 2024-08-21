@@ -321,11 +321,31 @@ class Grab(commands.Cog):
             f"{os.environ.get('BOORU_URL', '')}/posts/{image[0]['id']}?q={'+'.join(tags.split(' '))}"
         )
 
+    # User autocompletion, useful for some things!
+    async def user_autocomplete(
+        self, interaction: discord.Interaction, current: str
+    ) -> list[app_commands.Choice[str]]:
+        usernames = booru_scripts.fetch_usernames(
+            self.api_url, self.api_key, self.api_user
+        )
+
+        # Filter usernames based on what the user has typed
+        matching_usernames = [
+            name for name in usernames if current.lower() in name.lower()
+        ]
+
+        return [
+            app_commands.Choice(name=username, value=username)
+            for username in matching_usernames
+        ][:25]
+        # Discord limits to 25 choices
+
     @app_commands.command(
         name="fav",
         description="Grab a favorite from a user's fav list~ ",
     )
-    @app_commands.describe(tags="Like `cute canine outdoors`")
+    @app_commands.describe(tags="Like `vulpine outdoors`")
+    @app_commands.autocomplete(user=user_autocomplete)
     async def fav_random(
         self,
         interaction: discord.Interaction,

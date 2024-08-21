@@ -334,3 +334,22 @@ def append_source_to_post(post_id, source_url, danbooru_url, api_key, username):
         print(f"Failed to fetch post {post_id}. Status code: {response.status_code}")
         print(f"Response: {response.text}")
         return None
+
+
+# Fetches a list of users from the server
+def fetch_usernames(danbooru_url, api_key, username, limit=10):
+    url = f"{danbooru_url}/users.json"
+
+    params = {
+        "limit": limit,
+        "login": username,
+        "api_key": api_key,
+    }
+
+    response = requests.get(url, params=params)
+    if response.status_code == 200:
+        return [user["name"] for user in response.json()]
+    else:
+        print(f"Failed to fetch usernames. Status code: {response.status_code}")
+        print(f"Response: {response.text}")
+        return []

@@ -65,3 +65,9 @@ Fixes in {{version}}
 ## Changelog 7
 
 New command! `/random <tags>` will snatch a random matching post from the booru server~
+
+
+## Changelog 8
+
+New command `/fav <user=vixi> <tags="">` That will let you get the most recent matching favorite
+from your favorite users~
