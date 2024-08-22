@@ -315,11 +315,12 @@ class BackgroundBooru(commands.Cog, name="BooruBackgroundCog"):
 
         # Fetch posts with missing source, missing artist, or bad_link tags
         posts_to_check = booru_scripts.fetch_images_with_tag(
-            "missing_source OR missing_artist OR bad_link",
+            "missing_source OR missing_artist OR bad_link OR tagme",
             self.api_url,
             self.api_key,
             self.api_user,
             limit=100,
+            random=True,
         )
 
         for post in posts_to_check:
