@@ -313,13 +313,35 @@ class BackgroundBooru(commands.Cog, name="BooruBackgroundCog"):
 
         changes = []
 
+        posts_to_check = []
+
         # Fetch posts with missing source, missing artist, or bad_link tags
-        posts_to_check = booru_scripts.fetch_images_with_tag(
-            "missing_source OR missing_artist OR bad_link OR tagme",
+        posts_to_check += booru_scripts.fetch_images_with_tag(
+            "missing_source OR missing_artist OR bad_link",
             self.api_url,
             self.api_key,
             self.api_user,
-            limit=10,
+            limit=20,
+            random=True,
+        )
+
+        # Pick some others at random just to run automated checks on periodically
+        posts_to_check += booru_scripts.fetch_images_with_tag(
+            "",
+            self.api_url,
+            self.api_key,
+            self.api_user,
+            limit=20,
+            random=True,
+        )
+
+        # Also pick some common-fault ones (mainly hard kinks miss-tagged)
+        posts_to_check += booru_scripts.fetch_images_with_tag(
+            "cock_vore OR anal_vore OR unbirth OR digestion",
+            self.api_url,
+            self.api_key,
+            self.api_user,
+            limit=20,
             random=True,
         )
 
@@ -353,9 +375,10 @@ class BackgroundBooru(commands.Cog, name="BooruBackgroundCog"):
                 changes.append(f"Removed `missing_artist` from <{post_url}>")
 
             # Check for vore tag consistency
+            vore_matches = ["vore", "unbirth"]  # General contents to match on
             if (
-                "vore" in post["tag_string"]
-                and not "vore" in post.get("tag_string", "").split()
+                any(tag in post["tag_string"] for tag in vore_matches)
+                and not "vore" in post["tag_string"].split()
             ):
                 booru_scripts.append_post_tags(
                     post_id, "vore", self.api_url, self.api_key, self.api_user
@@ -363,7 +386,14 @@ class BackgroundBooru(commands.Cog, name="BooruBackgroundCog"):
                 changes.append(f"Added `vore` to <{post_url}>")
 
             # Check for bad links
-            if "bad_link" in post["tag_string"] and "discord" in post["source"]:
+            if (
+                "bad_link" in post["tag_string"]
+                and "discord" in post["source"]  # Discord sources dont count
+                and "exclusive"
+                not in post[
+                    "tag_string"
+                ]  # If its exclusive, we dont care where it came from
+            ):
                 booru_scripts.append_source_to_post(
                     post_id, None, self.api_url, self.api_key, self.api_user
                 )
