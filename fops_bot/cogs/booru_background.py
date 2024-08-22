@@ -376,7 +376,9 @@ class BackgroundBooru(commands.Cog, name="BooruBackgroundCog"):
         # Report changes
         if changes:
             report = "\n".join(changes)
-            await channel.send(f"Here's what was fixed in the last check:\n\n{report}")
+            await channel.send(
+                f"Here's what was fixed in the last check:\n\n{report}", embed=None
+            )
         else:
             logging.info("No changes made during this check.")
 
