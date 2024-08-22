@@ -319,7 +319,7 @@ class BackgroundBooru(commands.Cog, name="BooruBackgroundCog"):
             self.api_url,
             self.api_key,
             self.api_user,
-            limit=100,
+            limit=10,
             random=True,
         )
 
@@ -338,7 +338,7 @@ class BackgroundBooru(commands.Cog, name="BooruBackgroundCog"):
                     self.api_user,
                     ["missing_source"],  # Remove tags
                 )
-                changes.append(f"Removed `missing_source` from {post_url}")
+                changes.append(f"Removed `missing_source` from <{post_url}>")
 
             # Check for missing artist tag and fix it
             if "missing_artist" in post["tag_string"] and post["tag_string_artist"]:
@@ -350,7 +350,7 @@ class BackgroundBooru(commands.Cog, name="BooruBackgroundCog"):
                     self.api_user,
                     ["missing_artist"],  # Remove tags
                 )
-                changes.append(f"Removed `missing_artist` from {post_url}")
+                changes.append(f"Removed `missing_artist` from <{post_url}>")
 
             # Check for vore tag consistency
             if (
@@ -360,7 +360,7 @@ class BackgroundBooru(commands.Cog, name="BooruBackgroundCog"):
                 booru_scripts.append_post_tags(
                     post_id, "vore", self.api_url, self.api_key, self.api_user
                 )
-                changes.append(f"Added `vore` to {post_url}")
+                changes.append(f"Added `vore` to <{post_url}>")
 
             # Check for bad links
             if "bad_link" in post["tag_string"] and "discord" in post["source"]:
@@ -371,7 +371,7 @@ class BackgroundBooru(commands.Cog, name="BooruBackgroundCog"):
                     post_id, "missing_source", self.api_url, self.api_key, self.api_user
                 )
                 changes.append(
-                    f"Removed discord source and added `missing_source` to {post_url}"
+                    f"Removed discord source and added `missing_source` to <{post_url}>"
                 )
 
         # Report changes
