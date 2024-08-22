@@ -81,7 +81,7 @@ def message_contains(message: discord.Message, _lst: list) -> bool:
     return False
 
 
-class YTDLP(commands.Cog, name="ytdlp"):
+class YTDLP(commands.Cog, name="YTDLPCog"):
     def __init__(self, bot):
         self.bot = bot
 

@@ -9,7 +9,7 @@ from discord.ext import commands
 from utilities.database import store_key, retrieve_key
 
 
-class ToolCog(commands.Cog, name="Tools"):
+class ToolCog(commands.Cog, name="ToolsCog"):
     def __init__(self, bot):
         self.bot = bot
 

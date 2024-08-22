@@ -30,7 +30,7 @@ def get_current_changelog(file_path) -> (int, str):
     return changelog_number, changelog_content
 
 
-class Changelog(commands.Cog):
+class Changelog(commands.Cog, name="ChangeLogCog"):
     def __init__(self, bot):
         super().__init__()
         self.bot = bot

@@ -22,7 +22,7 @@ from utilities.database import retrieve_key, store_key
 booru_scripts = imp.load_source("booru_scripts", "fops_bot/scripts/danbooru-scripts.py")
 
 
-class BackgroundBooru(commands.Cog):
+class BackgroundBooru(commands.Cog, name="BooruBackgroundCog"):
     def __init__(self, bot):
         self.bot = bot
 
@@ -40,6 +40,7 @@ class BackgroundBooru(commands.Cog):
         # Start tasks
         self.update_status.start()
         self.check_new_comments.start()
+        self.check_and_report_posts.start()
 
     def check_reply(self, message):
         if message.reference is None:
@@ -101,6 +102,9 @@ class BackgroundBooru(commands.Cog):
                     self.api_url,
                     self.api_key,
                     self.api_user,
+                    [
+                        "missing_source"
+                    ],  # Will remove missing_source tag if we apply a source
                 )
                 logging.info(f"Source URL {source_url} appended to post {post_id}")
                 await message.add_reaction(
@@ -283,6 +287,91 @@ class BackgroundBooru(commands.Cog):
         store_key("last_comment_id", new_comments[0]["id"])
 
         logging.info(f"Posted {len(new_comments)} new comments.")
+
+    """
+    This check and report function is a little monolithic but, should get the job done :)
+    """
+
+    @tasks.loop(hours=2)
+    async def check_and_report_posts(self):
+        channel = self.bot.get_channel(
+            int(os.environ.get("BOORU_MAINTENANCE", "00000000000"))
+        )
+
+        if not channel:
+            logging.warn("Could not get maintenance channel.")
+            return
+
+        changes = []
+
+        # Fetch posts with missing source, missing artist, or bad_link tags
+        posts_to_check = booru_scripts.fetch_images_with_tag(
+            "missing_source OR missing_artist OR bad_link",
+            self.api_url,
+            self.api_key,
+            self.api_user,
+            limit=100,
+        )
+
+        for post in posts_to_check:
+            # logging.debug(f"Checking {post}")
+            post_id = post["id"]
+            post_url = f"{os.environ.get('BOORU_URL', '')}/posts/{post_id}"
+
+            # Check for missing source tag and fix it
+            if "missing_source" in post["tag_string"] and post["source"]:
+                booru_scripts.append_post_tags(
+                    post_id,
+                    "",
+                    self.api_url,
+                    self.api_key,
+                    self.api_user,
+                    ["missing_source"],  # Remove tags
+                )
+                changes.append(f"Removed `missing_source` from {post_url}")
+
+            # Check for missing artist tag and fix it
+            if "missing_artist" in post["tag_string"] and post["tag_string_artist"]:
+                booru_scripts.append_post_tags(
+                    post_id,
+                    "",
+                    self.api_url,
+                    self.api_key,
+                    self.api_user,
+                    ["missing_artist"],  # Remove tags
+                )
+                changes.append(f"Removed `missing_artist` from {post_url}")
+
+            # Check for vore tag consistency
+            if (
+                "vore" in post["tag_string"]
+                and not "vore" in post.get("tag_string", "").split()
+            ):
+                booru_scripts.append_post_tags(
+                    post_id, "vore", self.api_url, self.api_key, self.api_user
+                )
+                changes.append(f"Added `vore` to {post_url}")
+
+            # Check for bad links
+            if "bad_link" in post["tag_string"] and "discord" in post["source"]:
+                booru_scripts.append_source_to_post(
+                    post_id, None, self.api_url, self.api_key, self.api_user
+                )
+                booru_scripts.append_post_tags(
+                    post_id, "missing_source", self.api_url, self.api_key, self.api_user
+                )
+                changes.append(
+                    f"Removed discord source and added `missing_source` to {post_url}"
+                )
+
+        # Report changes
+        if changes:
+            report = "\n".join(changes)
+            await channel.send(f"Here's what was fixed in the last check:\n\n{report}")
+        else:
+            logging.info("No changes made during this check.")
+
+        logging.info("Finished checking and fixing posts.")
 
 
 async def setup(bot):

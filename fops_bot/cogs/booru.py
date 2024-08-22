@@ -83,7 +83,7 @@ class TagModal(discord.ui.Modal, title="Enter Tags"):
             #     )
 
 
-class Booru(commands.Cog):
+class Booru(commands.Cog, name="BooruCog"):
     def __init__(self, bot):
         self.bot = bot
 

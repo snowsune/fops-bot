@@ -312,6 +312,10 @@ def append_source_to_post(post_id, source_url, danbooru_url, api_key, username):
 
         data = {"post": {"source": updated_source}}
 
+        # If the source_url is `None` erase the source
+        if source_url == None:
+            data = {"post": {"source": ""}}
+
         headers = {
             "Content-Type": "application/json",
         }

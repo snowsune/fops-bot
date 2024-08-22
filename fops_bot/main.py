@@ -69,10 +69,18 @@ class FopsBot:
 
         # Setup logging.
         if self.debug:
-            logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
+            logging.basicConfig(
+                stream=sys.stderr,
+                level=logging.DEBUG,
+                format="%(levelname)s:%(name)s: %(message)s",  # Include logger name in output
+            )
             logging.debug("Running in debug mode.")
         else:
-            logging.basicConfig(stream=sys.stderr, level=logging.INFO)
+            logging.basicConfig(
+                stream=sys.stderr,
+                level=logging.INFO,
+                format="%(levelname)s:%(name)s: %(message)s",  # Include logger name in output
+            )
             logging.info("Running in prod mode.")
 
         # Append some extra information to our discord bot
