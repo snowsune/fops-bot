@@ -102,10 +102,19 @@ class BackgroundBooru(commands.Cog, name="BooruBackgroundCog"):
                     self.api_url,
                     self.api_key,
                     self.api_user,
+                )
+
+                booru_scripts.append_post_tags(
+                    post_id,
+                    "",
+                    self.api_url,
+                    self.api_key,
+                    self.api_user,
                     [
                         "missing_source"
                     ],  # Will remove missing_source tag if we apply a source
                 )
+
                 logging.info(f"Source URL {source_url} appended to post {post_id}")
                 await message.add_reaction(
                     "🔗"
