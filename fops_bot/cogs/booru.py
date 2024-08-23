@@ -205,8 +205,16 @@ class Booru(commands.Cog, name="BooruCog"):
             # Prepare the description with user and channel information
             description = f"Uploaded by {message.author} in channel {message.channel}"
 
-            # TODO: Move to shared func
             tags = "tagme discord_archive"
+
+            # Check if channel name contains "vore" to add the "vore" tag
+            if "vore" in message.channel.name.lower():
+                tags += " vore"
+
+            # Check if channel is memes
+            if "meme" in message.channel.name.lower():
+                tags += " meme"
+
             rating = "e"
 
             # Upload everything
