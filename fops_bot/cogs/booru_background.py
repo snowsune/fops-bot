@@ -256,7 +256,7 @@ class BackgroundBooru(commands.Cog, name="BooruBackgroundCog"):
 
         return {"author": None, "source": None}
 
-    @tasks.loop(minutes=30)
+    @tasks.loop(seconds=30)
     async def check_new_comments(self):
         channel = self.bot.get_channel(
             int(
@@ -301,7 +301,7 @@ class BackgroundBooru(commands.Cog, name="BooruBackgroundCog"):
     This check and report function is a little monolithic but, should get the job done :)
     """
 
-    @tasks.loop(seconds=15)
+    @tasks.loop(minutes=30)
     async def check_and_report_posts(self):
         channel = self.bot.get_channel(
             int(os.environ.get("BOORU_MAINTENANCE", "00000000000"))
