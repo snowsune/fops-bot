@@ -66,7 +66,10 @@ class HolesCog(commands.Cog, name="HolesCog"):
         logging.debug(f"Hole In the wall got {msg}")
 
         # Shush of OOC
-        if msg.content[0] == "(":
+        try:
+            if msg.content[0] == "(":
+                return
+        except IndexError:
             return
 
         # Check if the message is in a static channel
