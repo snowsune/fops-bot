@@ -7,6 +7,7 @@ import imp
 import discord
 import logging
 import aiohttp
+import asyncio
 
 from datetime import datetime
 from typing import Literal, Optional
@@ -303,6 +304,21 @@ class BackgroundBooru(commands.Cog, name="BooruBackgroundCog"):
 
     @tasks.loop(minutes=30)
     async def check_and_report_posts(self):
+        try:
+            # Set a timeout for the operation
+            await asyncio.wait_for(self.run_check_and_report(), timeout=20)
+        except asyncio.TimeoutError:
+            logging.error("The check_and_report_posts task timed out.")
+            # Handle a timeout, for example by sending a notification or logging
+            channel = self.bot.get_channel(
+                int(os.environ.get("BOORU_MAINTENANCE", "00000000000"))
+            )
+            if channel:
+                await channel.send(
+                    "The scheduled check for posts has timed out and was cancelled."
+                )
+
+    async def run_check_and_report(self):
         channel = self.bot.get_channel(
             int(os.environ.get("BOORU_MAINTENANCE", "00000000000"))
         )
