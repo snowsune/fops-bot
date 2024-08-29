@@ -85,3 +85,11 @@ Fixes in {{version}}
 
 Fixes in {{version}}
  - In-progress commands will no longer be available to users without `Beta Tester` role
+
+
+## Changelog 11
+
+Added a new command in {{version}}
+ - In-progress command `convert_height` will convert your human height into species/anthro height!! YAYY
+
+In the future i deffo tend to add to this function, so lmk any comments~ thanks!
