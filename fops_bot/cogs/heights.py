@@ -1,14 +1,25 @@
 import discord
 import logging
-
 from discord import app_commands
 from discord.ext import commands
 
 # Dictionary to store species data
 species_data = {
-    "fox": {"male": 20, "female": 19},  # Heights in inches
-    "wolf": {"male": 32, "female": 30},
-    "giraffe": {"male": 216, "female": 192},
+    "fox": {
+        "male": 20,
+        "female": 19,
+        "color": discord.Color.orange(),
+    },  # Heights in inches
+    "wolf": {
+        "male": 32,
+        "female": 30,
+        "color": discord.Color.dark_grey(),
+    },
+    "giraffe": {
+        "male": 216,
+        "female": 192,
+        "color": discord.Color.yellow(),
+    },
 }
 
 
@@ -20,6 +31,7 @@ class AnthroHeightConverter(commands.Cog):
         name="convert_height",
         description="Convert human height to an anthropomorphic height!",
     )
+    @app_commands.checks.has_role("Beta Tester")
     async def convert_height(self, interaction: discord.Interaction):
         # Send the view with dropdowns and text input
         view = HeightConversionView()
@@ -101,8 +113,7 @@ class HeightInputModal(discord.ui.Modal, title="Enter Height"):
 
         # Parse height input
         try:
-            feet, inches = map(int, user_height_input.replace('"', "").split("'"))
-            user_height_inches = feet * 12 + inches
+            user_height_inches = self.feet_inches_to_inches(user_height_input)
         except ValueError as e:
             await interaction.response.send_message(
                 "Invalid height format. Please use feet'inches\" format, e.g., 5'11\".",
@@ -113,21 +124,26 @@ class HeightInputModal(discord.ui.Modal, title="Enter Height"):
 
         # Convert height for selected species
         species_height = species_data[self.species][self.gender]
-        anthro_height = self.convert_height(user_height_inches, species_height)
+        anthro_height_inches = self.convert_height(user_height_inches, species_height)
+        anthro_height_ft_in = self.inches_to_feet_inches(anthro_height_inches)
+
+        # Color code based on species
+        embed_color = species_data[self.species]["color"]
 
         # Create embed with conversion results
         embed = discord.Embed(
-            title="Anthropomorphic Height Conversion", color=discord.Color.blue()
+            title=f"Anthro {self.species.capitalize()} Height Conversion",
+            color=embed_color,
         )
         embed.add_field(
-            name="User Height",
-            value=f"{feet}'{inches}\" ({user_height_inches} inches)",
+            name="Your Height",
+            value=f"{self.inches_to_feet_inches(user_height_inches)} ({user_height_inches} inches)",
             inline=False,
         )
         embed.add_field(name="Gender", value=self.gender.capitalize(), inline=False)
         embed.add_field(
             name=f"{self.species.capitalize()} Equivalent Height",
-            value=f"{anthro_height:.2f} inches",
+            value=f"{anthro_height_ft_in} ({anthro_height_inches:.2f} inches)",
             inline=False,
         )
 
@@ -140,6 +156,39 @@ class HeightInputModal(discord.ui.Modal, title="Enter Height"):
             user_height_inches / human_average_height
         ) * species_height_inches
         return anthro_height
+
+    @staticmethod
+    def feet_inches_to_inches(height_str):
+        # Convert a height string in the format of feet'inches" to inches
+        feet, inches = map(int, height_str.replace('"', "").split("'"))
+        return feet * 12 + inches
+
+    @staticmethod
+    def inches_to_feet_inches(inches):
+        # Convert inches to a feet'inches" format string
+        feet = inches // 12
+        remaining_inches = inches % 12
+
+        # Use ASCII fractions for more realistic display
+        fractions = {
+            0.0: "",
+            0.125: "⅛",
+            0.25: "¼",
+            0.375: "⅜",
+            0.5: "½",
+            0.625: "⅝",
+            0.75: "¾",
+            0.875: "⅞",
+        }
+
+        closest_fraction = min(
+            fractions.keys(), key=lambda x: abs(x - (remaining_inches % 1))
+        )
+        inches_with_fraction = (
+            f"{int(remaining_inches)}{fractions[closest_fraction]}".strip()
+        )
+
+        return f"{int(feet)}'{inches_with_fraction}\""
 
 
 async def setup(bot):
