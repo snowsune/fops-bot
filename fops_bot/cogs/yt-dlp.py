@@ -72,7 +72,7 @@ class VideoExtractor:
             # Define the path for the compressed file
             self.compressed_file = self.file_path.replace(".", "_compressed.")
             try:
-                # Run ffmpeg to compress the video
+                # Run ffmpeg to compress the video more aggressively
                 subprocess.run(
                     [
                         "ffmpeg",
@@ -80,8 +80,18 @@ class VideoExtractor:
                         self.file_path,
                         "-vf",
                         "scale=iw/4:ih/4",  # Resize by quarter
+                        "-b:v",
+                        "500k",  # Set video bitrate to 500kbps
+                        "-maxrate",
+                        "500k",  # Cap max bitrate
+                        "-bufsize",
+                        "1000k",  # Buffer size for bitrate control
+                        "-r",
+                        "24",  # Reduce frame rate to 24 fps
                         "-c:a",
-                        "copy",  # Keep audio unchanged
+                        "aac",  # Encode audio to AAC for smaller size
+                        "-b:a",
+                        "128k",  # Set audio bitrate to 128kbps
                         self.compressed_file,
                     ],
                     check=True,
@@ -159,10 +169,13 @@ class YTDLP(commands.Cog):
                     except discord.errors.HTTPException:
                         await message.add_reaction("⚠️")
                         compressed_path = video.compress_file()
-                        await message.reply(
-                            "(File was compressed)",
-                            file=discord.File(video_path),
-                        )
+                        if compressed_path:
+                            await message.reply(
+                                "(File was compressed)",
+                                file=discord.File(compressed_path),
+                            )
+                        else:
+                            await message.add_reaction("❌")
                 else:
                     await message.add_reaction("❌")
             else:
