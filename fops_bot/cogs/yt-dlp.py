@@ -1,40 +1,35 @@
 import discord
 import logging
-import random
 import subprocess
 import os
 
-from typing import Literal, Optional
-from discord import app_commands
+from typing import Optional
 from discord.ext import commands
 
-from utilities.database import store_key, retrieve_key
+DISCORD_FILE_SIZE_LIMIT = 8 * 1024 * 1024  # 8MB limit for Discord uploads
 
 
 class VideoExtractor:
-    def __init__(self, _message):
-        self.message = _message
-
-        # Defines
+    def __init__(self, _content):
+        self.message_content = _content
         self.output_dir = "/tmp/ytdlp_output"
+        self.compressed_file = None
 
-    def __enter__(self) -> str:
-        logging.info(f"Video Extractor Processing {self.message}")
+    def __enter__(self) -> Optional[str]:
+        logging.info(f"Video Extractor Processing {self.message_content}")
 
         # Extract the URL
-        url = None
-        for word in self.message.split():
-            if "://" in word:
-                url = word
-                break
+        url = next(
+            (word for word in self.message_content.split() if "://" in word), None
+        )
 
         if not url:
-            logging.warn(
-                f'Found link in message "{self.message}"but could not extract url'
+            logging.warning(
+                f'Found link in message "{self.message_content}" but could not extract url'
             )
             return None  # No valid URL found
 
-        # Define output directory
+        # Create output directory
         os.makedirs(self.output_dir, exist_ok=True)
 
         # Execute yt-dlp with the URL
@@ -48,96 +43,133 @@ class VideoExtractor:
             subprocess.run(command, check=True)
         except subprocess.CalledProcessError as e:
             logging.error(f"yt-dlp failed: {e}")
-            return
+            return None
 
         # Find the video or image file it produced
         files = os.listdir(self.output_dir)
         if not files:
             logging.error("No files found in output directory")
-            return
+            return None
 
-        # Assume the first file is the desired one (could add logic to choose based on extension)
         self.file_path = os.path.join(self.output_dir, files[0])
 
-        # If we succeed, return the file path
+        # If we succeed, return this object
         if os.path.isfile(self.file_path):
-            return self.file_path
+            return self
         return None
+
+    def path(self):
+        return self.file_path
+
+    def compress_file(self) -> Optional[str]:
+        """
+        Compress the file using ffmpeg if it's too large.
+        """
+        # Compress only if the file exists and is larger than the Discord limit
+        if os.path.getsize(self.file_path) > DISCORD_FILE_SIZE_LIMIT:
+            logging.info(f"File size too large, compressing {self.file_path}")
+
+            # Define the path for the compressed file
+            self.compressed_file = self.file_path.replace(".", "_compressed.")
+            try:
+                # Run ffmpeg to compress the video
+                subprocess.run(
+                    [
+                        "ffmpeg",
+                        "-i",
+                        self.file_path,
+                        "-vf",
+                        "scale=iw/4:ih/4",  # Resize by quarter
+                        "-c:a",
+                        "copy",  # Keep audio unchanged
+                        self.compressed_file,
+                    ],
+                    check=True,
+                )
+
+                if os.path.getsize(self.compressed_file) <= DISCORD_FILE_SIZE_LIMIT:
+                    return self.compressed_file
+                else:
+                    logging.error("Compressed file is still too large.")
+                    return None
+            except subprocess.CalledProcessError as e:
+                logging.error(f"ffmpeg compression failed: {e}")
+                return None
+        return self.file_path
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if os.path.isfile(self.file_path):
-            # Clean up
             os.remove(self.file_path)
-
-        # Remove the output directory
+        if self.compressed_file and os.path.isfile(self.compressed_file):
+            os.remove(self.compressed_file)
         os.rmdir(self.output_dir)
 
 
-def message_contains(message: discord.Message, _lst: list) -> bool:
-    if (any(item in message.content.lower() for item in _lst)) and (
-        not message.author.bot
-    ):
-        return True
-    return False
+def message_contains(message: discord.Message, valid_domains: dict) -> Optional[str]:
+    """
+    Checks if the message contains a URL from a valid domain.
+    Returns the domain if found, otherwise None.
+    """
+    for domain in valid_domains:
+        if domain in message.content.lower():
+            return domain
+    return None
 
 
-class YTDLP(commands.Cog, name="YTDLPCog"):
+class YTDLP(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.valid_domains = {
+            "instagram.com": "Instagram",
+            "instagramez.com": "Instagram",
+            "facebook.com": "Facebook",
+            "x.com": "Twitter",
+            "fixupx.com": "Twitter",
+            "fxtwitter.com": "Twitter",
+            "tiktok.com": "TikTok",
+        }
 
     @commands.Cog.listener("on_message")
-    async def instaListener(self, message: discord.Message):
+    async def mediaListener(self, message: discord.Message):
         """
-        Find messages that come from insta, download them, replace the original.
+        Listener for messages containing media URLs. Handles various domains like Instagram, Facebook, Twitter.
         """
-
-        valid_urls = ["instagram.com", "instagramez.com"]
-
-        # Only care about these matches
-        if not message_contains(message, valid_urls):
+        if message.author.bot:
             return
 
-        logging.info(f'Insta Listener caught message "{message.content}"')
-
-        with VideoExtractor(message.content) as video:
-            if video is not None:
-                await message.channel.send(file=discord.File(video))
-
-    @commands.Cog.listener("on_message")
-    async def facebookListener(self, message: discord.Message):
-        """
-        Same as insta, but for facebook.
-        """
-
-        valid_urls = ["facebook.com"]
-
-        # Only care about these matches
-        if not message_contains(message, valid_urls):
+        # Check if the message contains a valid domain
+        domain = message_contains(message, self.valid_domains)
+        if not domain:
             return
 
-        logging.info(f'Facebook Listener caught message "{message.content}"')
+        logging.info(
+            f'{self.valid_domains[domain]} Listener caught message "{message.content}"'
+        )
 
+        # React with an hourglass to indicate processing
+        await message.add_reaction("⏳")
+
+        # Use the VideoExtractor to download the media
         with VideoExtractor(message.content) as video:
             if video is not None:
-                await message.channel.send(file=discord.File(video))
+                video_path = video.path()
+                if video_path is not None:
+                    try:
+                        await message.reply(file=discord.File(video_path))
+                    except discord.errors.HTTPException:
+                        await message.add_reaction("⚠️")
+                        compressed_path = video.compress_file()
+                        await message.reply(
+                            "(File was compressed)",
+                            file=discord.File(video_path),
+                        )
+                else:
+                    await message.add_reaction("❌")
+            else:
+                await message.add_reaction("⚠️")  # Warn about failure
 
-    @commands.Cog.listener("on_message")
-    async def twitterListener(self, message: discord.Message):
-        """
-        Twitter/x
-        """
-
-        valid_urls = ["x.com", "fixupx.com", "fxtwitter.com"]
-
-        # Only care about these matches
-        if not message_contains(message, valid_urls):
-            return
-
-        logging.info(f'Twitter Listener caught message "{message.content}"')
-
-        with VideoExtractor(message.content) as video:
-            if video is not None:
-                await message.channel.send(file=discord.File(video))
+        # Remove the hourglass reaction after processing
+        await message.clear_reaction("⏳")
 
 
 async def setup(bot):
