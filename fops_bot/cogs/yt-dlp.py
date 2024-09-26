@@ -137,6 +137,8 @@ class YTDLP(commands.Cog):
             "fixupx.com": "Twitter",
             "fxtwitter.com": "Twitter",
             "tiktok.com": "TikTok",
+            "youtube.com": "YouTube",
+            "youtu.be": "YouTube",
         }
 
     @commands.Cog.listener("on_message")
@@ -144,6 +146,8 @@ class YTDLP(commands.Cog):
         """
         Listener for messages containing media URLs. Handles various domains like Instagram, Facebook, Twitter.
         """
+
+        # Ignore if the author is a bot
         if message.author.bot:
             return
 
