@@ -44,23 +44,29 @@ class BackgroundBooru(commands.Cog, name="BooruBackgroundCog"):
         self.check_and_report_posts.start()
 
     def check_reply(self, message):
-        if message.reference is None:
-            logging.debug("Message is not a reference")
-            return False
-        referenced_message = message.reference.resolved
-        if referenced_message is None:
-            logging.debug("Referenced message is None")
-            return False
-        if referenced_message.author.id != self.bot.user.id:
-            logging.debug("Referenced message is not the bot user")
-            return False
-        # Check if the message starts with a valid post ID (assuming it's a number)
         try:
-            post_id = int(referenced_message.content.split()[0])
-            return True
-        except ValueError:
+            if message.reference is None:
+                logging.debug("Message is not a reference")
+                return False
+            referenced_message = message.reference.resolved
+            if referenced_message is None:
+                logging.debug("Referenced message is None")
+                return False
+            if referenced_message.author.id != self.bot.user.id:
+                logging.debug("Referenced message is not the bot user")
+                return False
+            # Check if the message starts with a valid post ID (assuming it's a number)
+            try:
+                post_id = int(referenced_message.content.split()[0])
+                return True
+            except ValueError:
+                logging.warning(
+                    f"Couldn't translate the first portion of message into an ID, issue was {int(referenced_message.content.split()[0])}"
+                )
+                return False
+        except IndexError as e:
             logging.warning(
-                f"Couldn't translate the first portion of message into an ID, issue was {int(referenced_message.content.split()[0])}"
+                f"Index error when splitting reply, this is usually because a user replied with a gif or embed. Message was {message}"
             )
             return False
 

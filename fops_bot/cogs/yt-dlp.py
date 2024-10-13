@@ -6,6 +6,8 @@ import os
 from typing import Optional
 from discord.ext import commands
 
+from utilities.database import is_feature_enabled
+
 DISCORD_FILE_SIZE_LIMIT = 8 * 1024 * 1024  # 8MB limit for Discord uploads
 
 
@@ -139,6 +141,7 @@ class YTDLP(commands.Cog):
             "tiktok.com": "TikTok",
             "youtube.com": "YouTube",
             "youtu.be": "YouTube",
+            "vxtwitter.com": "Twitter",
         }
 
     @commands.Cog.listener("on_message")
@@ -150,6 +153,10 @@ class YTDLP(commands.Cog):
         # Ignore if the author is a bot
         if message.author.bot:
             return
+
+        # Ignore if the bot is disabled for this guild
+        # if not await retrieve_key(message.guild.id, "yt-dlp"):
+        #     return
 
         # Check if the message contains a valid domain
         domain = message_contains(message, self.valid_domains)
