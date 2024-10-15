@@ -18,7 +18,9 @@ from discord.ext import commands, tasks
 from utilities.database import retrieve_key, store_key
 
 
-booru_scripts = imp.load_source("booru_scripts", "fops_bot/scripts/danbooru-scripts.py")
+booru_scripts = imp.load_source(
+    "booru_scripts", "fops_bot/scripts/Booru_Scripts/booru_utils.py"
+)
 
 
 # This is pretty cool, basically a popup UI

@@ -20,7 +20,9 @@ from saucenao_api.errors import SauceNaoApiError
 from utilities.database import retrieve_key, store_key
 
 
-booru_scripts = imp.load_source("booru_scripts", "fops_bot/scripts/danbooru-scripts.py")
+booru_scripts = imp.load_source(
+    "booru_scripts", "fops_bot/scripts/Booru_Scripts/booru_utils.py"
+)
 
 
 class BackgroundBooru(commands.Cog, name="BooruBackgroundCog"):
