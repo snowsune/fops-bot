@@ -95,8 +95,10 @@ class ErrorHandlerCog(commands.Cog):
                     )
             else:
                 logging.warning(f"Admin channel with ID {admin_channel_id} not found")
+                raise error
         else:
             logging.warning("No admin channel configured for error reporting")
+            raise error
 
     @app_commands.command(name="test_error_handler")
     @app_commands.checks.has_permissions(administrator=True)

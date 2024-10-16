@@ -1,7 +1,7 @@
 import discord
 import logging
 
-from .features import get_feature_data, set_feature_state
+from .features import get_feature_data, set_feature_state, is_feature_enabled
 
 
 async def set_feature_state_helper(
@@ -12,6 +12,11 @@ async def set_feature_state_helper(
     multi_channel: bool = False,
 ):
     guild_id = ctx.guild.id
+
+    # Just to auto-populate if needed
+    is_feature_enabled(guild_id, feature_name, enable)
+
+    # Get the raw data
     raw_feature_data = get_feature_data(guild_id, feature_name)
 
     # Check if the existing data is None
