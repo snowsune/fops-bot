@@ -440,14 +440,15 @@ class Booru(commands.Cog, name="BooruCog"):
             logging.info(f"Enabling new auto upload in channel {channel}")
             previous_data = []  # Blank list, for new values
         else:
-            previous_data = feature_data.get("feature_variables").split(",")
+            previous_data = raw_feature_data.get("feature_variables").split(",")
 
         previous_data.append(str(channel.id))
 
         set_feature_state(guild_id, "booru_auto_upload", True, ",".join(previous_data))
 
         await ctx.response.send_message(
-            f"{channel.mention} now enabled for auto_upload along with {len(previous_data)} other channels.",
+            f"{channel.mention} now enabled for auto_upload along with "
+            f"{', '.join([f'<#{ch_id}>' for ch_id in previous_data[:-1]])}",
             ephemeral=True,
         )
 
