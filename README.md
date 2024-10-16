@@ -93,3 +93,21 @@ Added a new command in {{version}}
  - In-progress command `convert_height` will convert your human height into species/anthro height!! YAYY
 
 In the future i deffo tend to add to this function, so lmk any comments~ thanks!
+
+
+## Changelog 12
+
+BIG NEWS <@&1248737660315635754>s!
+
+So i've been doing a TON of stuff under the hood, mainly.. cleaning up old code XD
+
+I was spending more time chasing bugs than i was actually playing with new features!
+Speaking of features.. i now have a much more robust feature system! that actually ties into
+the database backend at LAST finally bringing the yaml and dynamic db together!
+
+This means 2 things,
+
+1) I can get back to work on more fun things!
+2) The bot can live on *your* servers now! Since configuration is now done on a per-guild basis
+
+PM me for the bot invite!

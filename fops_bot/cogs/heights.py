@@ -20,9 +20,9 @@ species_data = {
         "female": 192,
         "color": discord.Color.yellow(),
     },
-    "owl": {
-        "male": 22,
-        "female": 21.5,
+    "barn_owl": {
+        "male": 18.5,
+        "female": 16.5,
         "color": discord.Color.yellow(),
     },
 }

@@ -9,10 +9,6 @@ LABEL authors="31870999+KenwoodFox@users.noreply.github.com"
 ARG APP_NAME=fops-bot
 ENV APP_NAME=${APP_NAME}
 
-# Get the current git version
-ARG GIT_COMMIT
-ENV GIT_COMMIT=$GIT_COMMIT
-
 # App home
 ARG HOME="/app"
 ENV HOME=${HOME}
@@ -34,15 +30,21 @@ RUN pip install -r requirements/requirements.txt --no-cache-dir
 # Install testing reqs
 RUN pip install -r requirements/test_requirements.txt --no-cache-dir
 
-# Copy in everything else
-ADD . ${HOME}
 # Add /bin to path
+RUN mkdir -p ${HOME}/bin
 ENV PATH $PATH:${HOME}/bin
 
 # Install yt-dlp
 RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o ${HOME}/bin/yt-dlp
 RUN chmod a+rx ${HOME}/bin/yt-dlp
 RUN yt-dlp -U
+
+# Copy in everything else
+ADD . ${HOME}
+
+# Get the current git version
+ARG GIT_COMMIT
+ENV GIT_COMMIT=$GIT_COMMIT
 
 # Install our app in edit mode using pip
 RUN pip install -e ${HOME} --no-cache-dir
