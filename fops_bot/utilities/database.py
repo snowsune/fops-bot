@@ -1,8 +1,5 @@
-# Just some helper functions to make database access really quick and dirty
-
-import psycopg
-import logging
 import os
+import psycopg
 
 
 def getCur():
@@ -14,41 +11,7 @@ def getCur():
         port=os.getenv("DB_PORT"),
     )
     cur = conn.cursor()
-
     return cur, conn
-
-
-def init_db():
-    cur, conn = getCur()
-
-    # This table is for the key-value pair
-    cur.execute(
-        """
-    CREATE TABLE IF NOT EXISTS key_value_store (
-        key TEXT PRIMARY KEY,
-        value TEXT
-    )
-    """
-    )
-
-    # Table for dynamic hole registration
-    cur.execute(
-        """
-    CREATE TABLE IF NOT EXISTS dynamic_users (
-        guild_id TEXT,
-        chan_id TEXT,
-        user_id TEXT,
-        fluff TEXT,
-        PRIMARY KEY (guild_id, chan_id, user_id)
-    )
-    """
-    )
-
-    conn.commit()
-    cur.close()
-    conn.close()
-
-    return True  # We are ready
 
 
 def store_key(key, value):

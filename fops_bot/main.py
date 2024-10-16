@@ -14,7 +14,7 @@ import discord
 from discord import Intents, app_commands
 from discord.ext import commands
 
-from .utilities.database import init_db
+from .utilities.migrations import init_migrations
 
 
 async def on_tree_error(
@@ -39,11 +39,25 @@ async def on_tree_error(
         raise error
 
 
+def init_db():
+    try:
+        # Initialize and run migrations
+        init_migrations()
+        logging.info("Database initialized and migrations applied successfully.")
+        return True
+    except Exception as e:
+        logging.exception(f"Database initialization failed: {e}")
+        return False
+
+
 class FopsBot:
     def __init__(self):
         # Intents (new iirc)
         intents = Intents(messages=True, guilds=True)
         intents.message_content = True
+
+        # Some local memory flags
+        self.dbReady = False
 
         # Create our discord bot
         self.bot = commands.Bot(command_prefix="^", intents=intents)
@@ -86,12 +100,22 @@ class FopsBot:
         # Append some extra information to our discord bot
         self.bot.version = self.version  # Package version with bot
 
+        # DB Setup
+        try:
+            logging.info("Configuring DB and running migrations")
+            self.dbReady = init_db()
+        except Exception as e:
+            logging.error(f"Could not configure the DB! Error was {e}")
+            self.dbReady = False
+        finally:
+            logging.info("Done configuring DB")
+
     async def load_cogs(self):
         # Cog Loader!
         logging.info("Loading cogs...")
         for filename in os.listdir(self.workdir + "cogs"):
             logging.info(f"Found file {filename}, loading as extension.")
-            if filename.endswith(".py"):
+            if filename.endswith(".py") and not filename.startswith("_"):
                 try:
                     await self.bot.load_extension(f"cogs.{filename[:-3]}")
                 except Exception as e:
@@ -106,16 +130,6 @@ class FopsBot:
         self.healthcheck_server = await discordhealthcheck.start(self.bot)
         logging.info("Done prepping external monitoring")
 
-        # DB Setup
-        try:
-            logging.info("Configuring DB")
-            self.bot.dbReady = init_db()
-        except Exception as e:
-            logging.error(f"Could not configure the DB! Error was {e}")
-            self.bot.dbReady = False
-        finally:
-            logging.info("Done configuring DB")
-
         await self.bot.tree.sync()
 
     async def on_message(self, ctx):
@@ -124,6 +138,10 @@ class FopsBot:
 
     async def start_bot(self):
         logging.info(f"Using version {self.version}")
+
+        if not self.dbReady:
+            logging.error("Database not ready. Bot will not start.")
+            return
 
         # Begin the cog loader
         await self.load_cogs()

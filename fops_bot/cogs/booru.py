@@ -15,6 +15,14 @@ from typing import Literal, Optional
 from discord import app_commands
 from discord.ext import commands, tasks
 
+from utilities.features import (
+    is_feature_enabled,
+    set_feature_state,
+    get_feature_data,
+    get_guilds_with_feature_enabled,
+    is_nsfw_enabled,
+)
+
 from utilities.database import retrieve_key, store_key
 
 
@@ -103,10 +111,6 @@ class Booru(commands.Cog, name="BooruCog"):
         self.api_key = os.environ.get("BOORU_KEY", "")
         self.api_user = os.environ.get("BOORU_USER", "")
         self.api_url = os.environ.get("BOORU_URL", "")
-        # This one must be parsed
-        self.auto_upload_list = os.environ.get("BOORU_AUTO_UPLOAD", "00,00").split(
-            ", "
-        )  # Todo, better way to strip whitespace
 
     @commands.Cog.listener()
     async def on_ready(self):
@@ -198,7 +202,13 @@ class Booru(commands.Cog, name="BooruCog"):
             # We get to this stage when we've looked up and confirmed that this post is unique!
             await message.add_reaction("💎")
 
-            if str(message.channel.id) not in self.auto_upload_list:
+            # Auto upload list is pulled from the fea   tures database
+            auto_upload_list = (
+                get_feature_data(message.guild.id, "booru_auto_upload")
+                .get("feature_variables")
+                .split(",")
+            )
+            if str(message.channel.id) not in auto_upload_list:
                 logging.info(
                     f"Not uploading image in {message.channel.id}, not in list {self.auto_upload_list}"
                 )
@@ -302,6 +312,10 @@ class Booru(commands.Cog, name="BooruCog"):
     )
     @app_commands.describe(tags="Like `cute canine outdoors`")
     async def random(self, interaction: discord.Interaction, tags: str):
+        # Skip if not NSFW!
+        if not await is_nsfw_enabled(interaction):
+            return
+
         # Default tags to exclude unless explicitly included
         default_exclude = ["vore", "gore", "scat", "watersports", "loli", "shota"]
 
@@ -357,7 +371,6 @@ class Booru(commands.Cog, name="BooruCog"):
     @app_commands.describe(
         user="If you dont see your name listed, try favoriting something and waiting 15 minutes!`"
     )
-    @app_commands.checks.has_role("Beta Tester")
     @app_commands.autocomplete(user=user_autocomplete)
     async def fav(
         self,
@@ -365,6 +378,9 @@ class Booru(commands.Cog, name="BooruCog"):
         user: str,
         tags: str = "",
     ):
+        if not await is_nsfw_enabled(interaction):
+            return
+
         # Default tags to exclude unless explicitly included
         default_exclude = ["vore", "gore", "scat", "watersports", "loli", "shota"]
 
@@ -401,16 +417,135 @@ class Booru(commands.Cog, name="BooruCog"):
             f"{os.environ.get('BOORU_URL', '')}/posts/{selected_image['id']}?q={'+'.join(tags.split(' '))}"
         )
 
-    # @say.error
-    # async def say_error(ctx, error):
-    #     if isinstance(error, commands.MissingRole):
-    #         await ctx.send(f"`You dont have {error.missing_role} role..")
-    #     else:
-    #         raise error  # if we can't handle the error, bubble it back up
+    # ==================================================
+    # Feature enable/disable
+    # ==================================================
+
+    @app_commands.command(name="enable_booru_upload")
+    @app_commands.checks.has_permissions(administrator=True)
+    @app_commands.describe(
+        channel="Will enable automatic upload to the booru server for this channel"
+    )
+    async def enable_booru_upload(
+        self, ctx: discord.Interaction, channel: discord.TextChannel
+    ):
+        """
+        Enables the booru auto upload on a channel
+        """
+        guild_id = ctx.guild_id
+
+        raw_feature_data = get_feature_data(guild_id, "booru_auto_upload")
+
+        if not raw_feature_data:
+            logging.info(f"Enabling new auto upload in channel {channel}")
+            previous_data = []  # Blank list, for new values
+        else:
+            previous_data = raw_feature_data.get("feature_variables").split(",")
+
+        previous_data.append(str(channel.id))
+
+        set_feature_state(guild_id, "booru_auto_upload", True, ",".join(previous_data))
+
+        await ctx.response.send_message(
+            f"{channel.mention} now enabled for auto_upload along with "
+            f"{', '.join([f'<#{ch_id}>' for ch_id in previous_data[:-1]])}",
+            ephemeral=True,
+        )
+
+    @app_commands.command(name="disable_booru_auto_upload")
+    @app_commands.checks.has_permissions(administrator=True)
+    @app_commands.describe(
+        channel="Will disable automatic upload to the booru server for this channel"
+    )
+    async def disable_booru_upload(
+        self, ctx: discord.Interaction, channel: discord.TextChannel
+    ):
+        """
+        Disables the booru auto upload on a channel
+        """
+        guild_id = ctx.guild_id
+
+        # Retrieve the feature data for booru_auto_upload
+        raw_feature_data = get_feature_data(guild_id, "booru_auto_upload")
+
+        if not raw_feature_data:
+            await ctx.response.send_message(
+                "Auto-upload feature is not enabled for any channel.", ephemeral=True
+            )
+            return
+
+        previous_data = raw_feature_data.get("feature_variables").split(",")
+
+        # Remove the selected channel's ID if it's in the list
+        if str(channel.id) in previous_data:
+            previous_data.remove(str(channel.id))
+
+            if previous_data:
+                # Update the feature data with the new list of channels
+                set_feature_state(
+                    guild_id, "booru_auto_upload", True, ",".join(previous_data)
+                )
+                await ctx.response.send_message(
+                    f"Auto-upload disabled for {channel.mention}. Remaining channels: {len(previous_data)}",
+                    ephemeral=True,
+                )
+            else:
+                # If no channels are left, disable the feature entirely
+                set_feature_state(guild_id, "booru_auto_upload", False, "")
+                await ctx.response.send_message(
+                    f"Auto-upload disabled for {channel.mention}. No channels remain; feature disabled.",
+                    ephemeral=True,
+                )
+        else:
+            await ctx.response.send_message(
+                f"{channel.mention} is not currently enabled for auto-upload.",
+                ephemeral=True,
+            )
+
+    @app_commands.command(name="set_booru_maintenance")
+    @app_commands.checks.has_permissions(administrator=True)
+    @app_commands.describe(
+        channel="The channel to configure for booru maintenance tasks."
+    )
+    async def set_booru_maintenance(
+        self, ctx: discord.Interaction, channel: discord.TextChannel
+    ):
+        """
+        Enables the booru server to post here
+        """
+        guild_id = ctx.guild_id
+
+        set_feature_state(guild_id, "booru_maintenance", True, str(channel.id))
+
+        await ctx.response.send_message(
+            f"booru_maintenance enabled and channel set to {channel.mention}",
+            ephemeral=True,
+        )
+
+    @app_commands.command(name="set_booru_updates")
+    @app_commands.checks.has_permissions(administrator=True)
+    @app_commands.describe(
+        channel="The booru server will post regular comments and updates here"
+    )
+    async def set_set_booru_updates(
+        self, ctx: discord.Interaction, channel: discord.TextChannel
+    ):
+        """
+        Enables the booru server to post here
+        """
+        guild_id = ctx.guild_id
+
+        set_feature_state(guild_id, "booru_updates", True, str(channel.id))
+
+        await ctx.response.send_message(
+            f"booru_updates enabled and channel set to {channel.mention}",
+            ephemeral=True,
+        )
+
+    # ==================================================
+    # End Feature enable/disable
+    # ==================================================
 
 
 async def setup(bot):
     await bot.add_cog(Booru(bot))
-
-    # for cmd in bot.tree.get_commands():
-    #     print(f"Command available: {cmd.name}")

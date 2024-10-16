@@ -39,7 +39,7 @@ stop: ## Stop container
 	docker-compose stop
 
 dev:  ## Make everything you need to dev in the background
-	docker-compose -f docker-compose.yml up db pgadmin
+	docker-compose -f docker-compose.yml up db pgadmin --remove-orphans
 
 quick: build  ## Make just what you need to quick-test
 	docker-compose -f docker-compose.yml up fops_bot
