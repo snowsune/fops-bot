@@ -59,11 +59,13 @@ class BackgroundBooru(commands.Cog, name="BooruBackgroundCog"):
                 return True
             except ValueError:
                 logging.warning(
-                    f"Couldn't translate the first portion of message into an ID."
+                    f"Couldn't translate the first portion of message into an ID, issue was {int(referenced_message.content.split()[0])}"
                 )
                 return False
         except IndexError as e:
-            logging.warning(f"Index error when splitting reply: {message}")
+            logging.warning(
+                f"Index error when splitting reply, this is usually because a user replied with a gif or embed. Message was {message}"
+            )
             return False
 
     @commands.Cog.listener()
@@ -74,46 +76,109 @@ class BackgroundBooru(commands.Cog, name="BooruBackgroundCog"):
         if self.check_reply(message):
             logging.info("Checked reply")
             referenced_message = message.reference.resolved
+            # Extract the post ID from the first line of the original message
             post_id_line = referenced_message.content.splitlines()[0]
             try:
-                post_id = int(post_id_line.split()[-1])
+                post_id = int(
+                    post_id_line.split()[-1]
+                )  # Assuming the post ID is the last part of the first line
             except ValueError:
-                return
+                return  # Invalid post ID format
 
+            # Extract tags from the user's reply
             tags = message.content.split(" ")
-            await self.append_tags(post_id, tags)
+            applied_tags = await self.append_tags(post_id, tags)
 
+            # Thanks!
             await message.add_reaction("🙏")
 
+            # Check if source was provided
             source_url = None
             for tag in tags:
                 if tag.startswith("source:"):
-                    source_url = tag.split(":", 1)[1]
+                    source_url = tag.split(":", 1)[
+                        1
+                    ]  # Get the URL part after "source:"
 
             if source_url:
-                await self.add_source_to_post(post_id, source_url.strip(), message)
+                booru_scripts.append_source_to_post(
+                    post_id,
+                    source_url.strip(),
+                    self.api_url,
+                    self.api_key,
+                    self.api_user,
+                )
+
+                booru_scripts.append_post_tags(
+                    post_id,
+                    "",
+                    self.api_url,
+                    self.api_key,
+                    self.api_user,
+                    [
+                        "missing_source"
+                    ],  # Will remove missing_source tag if we apply a source
+                )
+
+                logging.info(f"Source URL {source_url} appended to post {post_id}")
+                await message.add_reaction(
+                    "🔗"
+                )  # React with a link emoji to indicate the source was added
+
+            # No tagme? yayy
+            if "tagme" not in booru_scripts.get_post_tags(
+                post_id,
+                self.api_url,
+                self.api_key,
+                self.api_user,
+            ):
+                await message.add_reaction("✨")
 
     async def append_tags(self, post_id, tags):
-        real_tags = [
-            tag
-            for tag in tags
-            if booru_scripts.tag_exists(tag, self.api_url, self.api_key, self.api_user)
-        ]
+        real_tags = []
+
+        for tag in tags:
+            if (
+                booru_scripts.tag_exists(
+                    tag,
+                    self.api_url,
+                    self.api_key,
+                    self.api_user,
+                )
+                or "art:" in tag
+            ):
+                real_tags.append(tag)
 
         booru_scripts.append_post_tags(
-            post_id, real_tags, self.api_url, self.api_key, self.api_user
+            post_id,
+            real_tags,
+            self.api_url,
+            self.api_key,
+            self.api_user,
         )
 
+        logging.info(f"Added {real_tags} to {post_id}")
+
+        # If the number of tags is over 8 we can clear the `tagme`
         if (
             len(
                 booru_scripts.get_post_tags(
-                    post_id, self.api_url, self.api_key, self.api_user
+                    post_id,
+                    self.api_url,
+                    self.api_key,
+                    self.api_user,
                 )
             )
             > 8
         ):
+            logging.info("Clearing tagme")
             booru_scripts.append_post_tags(
-                post_id, real_tags, self.api_url, self.api_key, self.api_user, ["tagme"]
+                post_id,
+                real_tags,
+                self.api_url,
+                self.api_key,
+                self.api_user,
+                ["tagme"],
             )
 
         return real_tags
