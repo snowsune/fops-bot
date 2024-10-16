@@ -53,7 +53,7 @@ class Changelog(commands.Cog, name="ChangeLogCog"):
         cur_lognum = int(_d[0])
         cur_logstr = _d[1]
 
-        logging.info(
+        logging.debug(
             f"Changelog is currently {cur_lognum}/{self.last_log}. Content was: {cur_logstr}"
         )
 

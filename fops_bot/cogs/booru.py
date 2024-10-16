@@ -24,7 +24,7 @@ from utilities.features import (
 )
 
 from utilities.database import retrieve_key, store_key
-
+from utilities.helpers import set_feature_state_helper
 
 booru_scripts = imp.load_source(
     "booru_scripts", "fops_bot/scripts/Booru_Scripts/booru_utils.py"
@@ -421,86 +421,28 @@ class Booru(commands.Cog, name="BooruCog"):
     # Feature enable/disable
     # ==================================================
 
-    @app_commands.command(name="enable_booru_upload")
+    @app_commands.command(name="booru_upload")
     @app_commands.checks.has_permissions(administrator=True)
     @app_commands.describe(
-        channel="Will enable automatic upload to the booru server for this channel"
+        channel="Enable or disable automatic upload to the booru server for this channel",
+        enable="Enable or disable booru upload for this channel (defaults to True)",
     )
-    async def enable_booru_upload(
-        self, ctx: discord.Interaction, channel: discord.TextChannel
+    async def booru_upload(
+        self,
+        ctx: discord.Interaction,
+        channel: discord.TextChannel,
+        enable: bool = True,
     ):
         """
-        Enables the booru auto upload on a channel
+        Enables or disables booru auto-upload on a channel.
         """
-        guild_id = ctx.guild_id
-
-        raw_feature_data = get_feature_data(guild_id, "booru_auto_upload")
-
-        if not raw_feature_data:
-            logging.info(f"Enabling new auto upload in channel {channel}")
-            previous_data = []  # Blank list, for new values
-        else:
-            previous_data = raw_feature_data.get("feature_variables").split(",")
-
-        previous_data.append(str(channel.id))
-
-        set_feature_state(guild_id, "booru_auto_upload", True, ",".join(previous_data))
-
-        await ctx.response.send_message(
-            f"{channel.mention} now enabled for auto_upload along with "
-            f"{', '.join([f'<#{ch_id}>' for ch_id in previous_data[:-1]])}",
-            ephemeral=True,
+        await set_feature_state_helper(
+            ctx=ctx,
+            feature_name="booru_auto_upload",
+            enable=enable,  # Toggle feature based on the passed argument
+            channels=[channel],  # Single channel at a time, but multi-channel feature
+            multi_channel=True,  # Can have multiple channels
         )
-
-    @app_commands.command(name="disable_booru_auto_upload")
-    @app_commands.checks.has_permissions(administrator=True)
-    @app_commands.describe(
-        channel="Will disable automatic upload to the booru server for this channel"
-    )
-    async def disable_booru_upload(
-        self, ctx: discord.Interaction, channel: discord.TextChannel
-    ):
-        """
-        Disables the booru auto upload on a channel
-        """
-        guild_id = ctx.guild_id
-
-        # Retrieve the feature data for booru_auto_upload
-        raw_feature_data = get_feature_data(guild_id, "booru_auto_upload")
-
-        if not raw_feature_data:
-            await ctx.response.send_message(
-                "Auto-upload feature is not enabled for any channel.", ephemeral=True
-            )
-            return
-
-        previous_data = raw_feature_data.get("feature_variables").split(",")
-
-        # Remove the selected channel's ID if it's in the list
-        if str(channel.id) in previous_data:
-            previous_data.remove(str(channel.id))
-
-            if previous_data:
-                # Update the feature data with the new list of channels
-                set_feature_state(
-                    guild_id, "booru_auto_upload", True, ",".join(previous_data)
-                )
-                await ctx.response.send_message(
-                    f"Auto-upload disabled for {channel.mention}. Remaining channels: {len(previous_data)}",
-                    ephemeral=True,
-                )
-            else:
-                # If no channels are left, disable the feature entirely
-                set_feature_state(guild_id, "booru_auto_upload", False, "")
-                await ctx.response.send_message(
-                    f"Auto-upload disabled for {channel.mention}. No channels remain; feature disabled.",
-                    ephemeral=True,
-                )
-        else:
-            await ctx.response.send_message(
-                f"{channel.mention} is not currently enabled for auto-upload.",
-                ephemeral=True,
-            )
 
     @app_commands.command(name="set_booru_maintenance")
     @app_commands.checks.has_permissions(administrator=True)

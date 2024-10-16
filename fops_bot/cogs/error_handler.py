@@ -11,6 +11,8 @@ from utilities.features import (
     get_guilds_with_feature_enabled,
 )
 
+from utilities.helpers import set_feature_state_helper
+
 
 class ErrorHandlerCog(commands.Cog):
     def __init__(self, bot):
@@ -64,6 +66,8 @@ class ErrorHandlerCog(commands.Cog):
     async def send_error_report(self, interaction: discord.Interaction, error):
         """
         Send a detailed error report to the configured admin channel for app commands.
+
+        Note, this does it on a per-guild basis, so you wont cross-post guild errors
         """
         guild_id = interaction.guild.id if interaction.guild else None
         feature_data = get_feature_data(guild_id, "error_reporting")
@@ -104,18 +108,25 @@ class ErrorHandlerCog(commands.Cog):
 
     @app_commands.command(name="set_error_channel")
     @app_commands.checks.has_permissions(administrator=True)
+    @app_commands.describe(
+        channel="The channel to set for error reporting",
+        enable="Enable or disable the error reporting feature (defaults to True)",
+    )
     async def set_error_channel(
-        self, ctx: discord.Interaction, channel: discord.TextChannel
+        self,
+        ctx: discord.Interaction,
+        channel: discord.TextChannel,
+        enable: bool = True,
     ):
         """
-        Sets the admin channel for error reporting.
+        Enables or disables error reporting for the admin channel.
         """
-        guild_id = ctx.guild.id
-        set_feature_state(guild_id, "error_reporting", True, str(channel.id))
-
-        await ctx.response.send_message(
-            f"Error reporting channel has been set to {channel.mention}.",
-            ephemeral=True,
+        await set_feature_state_helper(
+            ctx=ctx,
+            feature_name="error_reporting",
+            enable=enable,  # Toggle feature based on the passed argument
+            channels=[channel],  # Single channel
+            multi_channel=False,  # Not a multi-channel feature
         )
 
 
