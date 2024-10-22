@@ -82,6 +82,9 @@ class FavoriteWatcher(commands.Cog, name="FavoriteWatcherCog"):
                 try:
                     last_fav_index = latest_favs.index(int(last_fav))
                 except ValueError:
+                    logging.warning(
+                        f"For user {username} found more than 10 unposted favs!"
+                    )
                     # If last_fav is not in the list, post all 10 starting from the oldest
                     for fav_id in reversed(
                         latest_favs

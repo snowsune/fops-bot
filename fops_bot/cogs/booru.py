@@ -210,7 +210,7 @@ class Booru(commands.Cog, name="BooruCog"):
             )
             if str(message.channel.id) not in auto_upload_list:
                 logging.info(
-                    f"Not uploading image in {message.channel.id}, not in list {self.auto_upload_list}"
+                    f"Not uploading image in {message.channel.id}, not in list {auto_upload_list}"
                 )
                 return
 
