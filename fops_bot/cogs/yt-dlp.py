@@ -2,6 +2,7 @@ import discord
 import logging
 import subprocess
 import os
+import shutil
 
 from typing import Optional
 from discord.ext import commands
@@ -30,7 +31,13 @@ class VideoExtractor:
             return None  # No valid URL found
 
         # Create output directory
-        os.makedirs(self.output_dir, exist_ok=True)
+        if os.path.isdir(self.output_dir):
+            try:
+                os.rmdir(self.output_dir)
+            except OSError:
+                logging.warn("Had to remove leftover files..")
+                shutil.rmtree(self.output_dir)
+        os.makedirs(self.output_dir)
 
         # Execute yt-dlp with the URL
         try:
