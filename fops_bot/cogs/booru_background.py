@@ -283,75 +283,85 @@ class BackgroundBooru(commands.Cog, name="BooruBackgroundCog"):
 
                     store_key("last_comment_id", new_comments[0]["id"])
 
-    @tasks.loop(minutes=30)
+    @tasks.loop(minutes=2)
     async def check_and_report_posts(self):
         guilds_with_maintenance_enabled = get_guilds_with_feature_enabled(
             "booru_maintenance"
         )
 
-        for guild_id in guilds_with_maintenance_enabled:
-            feature_data = get_feature_data(guild_id, "booru_maintenance")
-            maintenance_channel_id = feature_data.get("feature_variables")
-            if not maintenance_channel_id:
-                continue
+        logging.debug(
+            f"Running check and report posts.. output in {len(guilds_with_maintenance_enabled)} guilds."
+        )
 
-            channel = self.bot.get_channel(int(maintenance_channel_id))
-            if not channel:
-                logging.warn(f"Could not find maintenance channel in guild {guild_id}.")
-                continue
+        if len(guilds_with_maintenance_enabled) == 0:
+            logging.warn("Error! No guilds configured to receive the booru maintenance!")
+            return
 
-            changes = []
+        changes = []
 
-            posts_to_check = booru_scripts.fetch_images_with_tag(
-                "missing_source OR missing_artist OR bad_link",
-                self.api_url,
-                self.api_key,
-                self.api_user,
-                limit=20,
-                random=True,
-            )
+        posts_to_check = booru_scripts.fetch_images_with_tag(
+            "missing_source OR missing_artist OR bad_link",
+            self.api_url,
+            self.api_key,
+            self.api_user,
+            limit=20,
+            random=True,
+        )
 
-            for post in posts_to_check:
-                post_id = post["id"]
-                post_url = f"{self.api_url}/posts/{post_id}"
+        for post in posts_to_check:
+            post_id = post["id"]
+            post_url = f"{self.api_url}/posts/{post_id}"
 
-                if "missing_source" in post["tag_string"] and post["source"]:
-                    booru_scripts.append_post_tags(
-                        post_id,
-                        "",
-                        self.api_url,
-                        self.api_key,
-                        self.api_user,
-                        ["missing_source"],
+            if "missing_source" in post["tag_string"] and post["source"]:
+                booru_scripts.append_post_tags(
+                    post_id,
+                    "",
+                    self.api_url,
+                    self.api_key,
+                    self.api_user,
+                    ["missing_source"],
+                )
+                changes.append(f"Removed `missing_source` from <{post_url}>")
+
+            if "missing_artist" in post["tag_string"] and post["tag_string_artist"]:
+                booru_scripts.append_post_tags(
+                    post_id,
+                    "",
+                    self.api_url,
+                    self.api_key,
+                    self.api_user,
+                    ["missing_artist"],
+                )
+                changes.append(f"Removed `missing_artist` from <{post_url}>")
+
+            if "vore" not in post["tag_string"].split() and any(
+                tag in post["tag_string"] for tag in ["vore", "unbirth"]
+            ):
+                booru_scripts.append_post_tags(
+                    post_id, "vore", self.api_url, self.api_key, self.api_user
+                )
+                changes.append(f"Added `vore` to <{post_url}>")
+
+        if changes:
+            for guild_id in guilds_with_maintenance_enabled:
+                maintenance_channel_id = feature_data.get("feature_variables")
+                feature_data = get_feature_data(guild_id, "booru_maintenance")
+                if not maintenance_channel_id:
+                    continue
+
+                channel = self.bot.get_channel(int(maintenance_channel_id))
+                if not channel:
+                    logging.warn(
+                        f"Could not find maintenance channel in guild {guild_id}."
                     )
-                    changes.append(f"Removed `missing_source` from <{post_url}>")
+                    continue
 
-                if "missing_artist" in post["tag_string"] and post["tag_string_artist"]:
-                    booru_scripts.append_post_tags(
-                        post_id,
-                        "",
-                        self.api_url,
-                        self.api_key,
-                        self.api_user,
-                        ["missing_artist"],
-                    )
-                    changes.append(f"Removed `missing_artist` from <{post_url}>")
-
-                if "vore" not in post["tag_string"].split() and any(
-                    tag in post["tag_string"] for tag in ["vore", "unbirth"]
-                ):
-                    booru_scripts.append_post_tags(
-                        post_id, "vore", self.api_url, self.api_key, self.api_user
-                    )
-                    changes.append(f"Added `vore` to <{post_url}>")
-
-            if changes:
                 report = "\n".join(changes)
                 await channel.send(
                     f"Fixed some regular maintenance things:\n\n{report}"
                 )
-            else:
-                logging.info("No changes made during this check.")
+        else:
+            logging.info("No changes made during this check.")
 
 
 async def setup(bot):
