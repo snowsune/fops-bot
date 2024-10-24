@@ -283,7 +283,7 @@ class BackgroundBooru(commands.Cog, name="BooruBackgroundCog"):
 
                     store_key("last_comment_id", new_comments[0]["id"])
 
-    @tasks.loop(minutes=2)
+    @tasks.loop(minutes=30)
     async def check_and_report_posts(self):
         guilds_with_maintenance_enabled = get_guilds_with_feature_enabled(
             "booru_maintenance"
