@@ -208,6 +208,27 @@ class ToolCog(commands.Cog, name="ToolsCog"):
         total = sum(rolls)
         await ctx.response.send_message(f"Rolls: {rolls}\nTotal: {total}")
 
+    @app_commands.command(name="sort_words")
+    @app_commands.describe(
+        message="The message whose words you want to sort by length and alphabetically."
+    )
+    async def sort_words(self, interaction: discord.Interaction, message: str):
+        """
+        Sorts all words in the provided message by length and alphabetically within each length.
+        """
+        # Split the message into words, remove punctuation, and convert to lowercase
+        words = [word.strip(".,!?;:\"'").lower() for word in message.split()]
+
+        # Sort words first alphabetically, then by length
+        sorted_words = sorted(words, key=lambda word: (len(word), word))
+
+        # Join the sorted words into a single string
+        sorted_message = " ".join(sorted_words)
+
+        await interaction.response.send_message(
+            f"Sorted words: {sorted_message}", ephemeral=True
+        )
+
 
 async def setup(bot):
     await bot.add_cog(ToolCog(bot))
