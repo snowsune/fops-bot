@@ -202,7 +202,7 @@ class Booru(commands.Cog, name="BooruCog"):
             # We get to this stage when we've looked up and confirmed that this post is unique!
             await message.add_reaction("💎")
 
-            # Auto upload list is pulled from the fea   tures database
+            # Auto upload list is pulled from the features database
             auto_upload_list = (
                 get_feature_data(message.guild.id, "booru_auto_upload")
                 .get("feature_variables")
@@ -217,7 +217,7 @@ class Booru(commands.Cog, name="BooruCog"):
             # Prepare the description with user and channel information
             description = f"Uploaded by {message.author} in channel {message.channel}"
 
-            tags = "tagme discord_archive"
+            tags = "tagme discord_archive missing_source missing_artist"
 
             # Check if channel name contains "vore" to add the "vore" tag
             if "vore" in message.channel.name.lower():
