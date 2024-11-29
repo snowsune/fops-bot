@@ -31,7 +31,7 @@ def init_db():
 class FopsBot:
     def __init__(self):
         # Intents (new iirc)
-        intents = Intents(messages=True, guilds=True)
+        intents = Intents(messages=True, reactions=True, guilds=True)
         intents.message_content = True
 
         # Some local memory flags

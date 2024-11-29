@@ -3,6 +3,7 @@
 # MIT License
 
 import os
+import re
 import imp
 import random
 import discord
@@ -22,6 +23,9 @@ from utilities.features import (
     get_guilds_with_feature_enabled,
     is_nsfw_enabled,
 )
+
+from saucenao_api import SauceNao
+from saucenao_api.errors import SauceNaoApiError
 
 from utilities.database import retrieve_key, store_key
 from utilities.helpers import set_feature_state_helper
@@ -112,6 +116,10 @@ class Booru(commands.Cog, name="BooruCog"):
         self.api_user = os.environ.get("BOORU_USER", "")
         self.api_url = os.environ.get("BOORU_URL", "")
 
+        # Configure SauceNAO
+        self.sauce_api_key = os.environ.get("SAUCENAO_API_KEY", "")
+        self.sauce = SauceNao(api_key=self.sauce_api_key)
+
     @commands.Cog.listener()
     async def on_ready(self):
         # Commands
@@ -149,24 +157,31 @@ class Booru(commands.Cog, name="BooruCog"):
 
     @commands.Cog.listener()
     async def on_message(self, message):
-        if message.author.bot:
+        if message.author.bot or not message.attachments:
             return
 
-        # Check if the message has exactly one attachment and is an image
-        if len(message.attachments) == 0:
-            logging.debug(
-                "No attachments!?? Vixi! DONT FORGOR: Must add discord check here!"
-            )
-            return
-
+        # Cant process more than one at a time!
         if len(message.attachments) > 1:
             logging.info("Too many attachments")
             await message.add_reaction("🤹‍♂️")
             return
 
+        # Must be an image
         if not message.attachments[0].content_type.startswith("image/"):
             logging.warn("Attachment is not an image?")
             await message.add_reaction("❌")
+            return
+
+        # Auto upload list is pulled from the features database
+        auto_upload_list = (
+            get_feature_data(message.guild.id, "booru_auto_upload")
+            .get("feature_variables")
+            .split(",")
+        )
+        if str(message.channel.id) not in auto_upload_list:
+            logging.info(
+                f"Not uploading image in {message.channel.id}, not in list {auto_upload_list}"
+            )
             return
 
         # Get attachment
@@ -201,18 +216,6 @@ class Booru(commands.Cog, name="BooruCog"):
         else:
             # We get to this stage when we've looked up and confirmed that this post is unique!
             await message.add_reaction("💎")
-
-            # Auto upload list is pulled from the features database
-            auto_upload_list = (
-                get_feature_data(message.guild.id, "booru_auto_upload")
-                .get("feature_variables")
-                .split(",")
-            )
-            if str(message.channel.id) not in auto_upload_list:
-                logging.info(
-                    f"Not uploading image in {message.channel.id}, not in list {auto_upload_list}"
-                )
-                return
 
             # Prepare the description with user and channel information
             description = f"Uploaded by {message.author} in channel {message.channel}"
@@ -257,7 +260,23 @@ class Booru(commands.Cog, name="BooruCog"):
                     for digit in post_id_str:
                         # React with the corresponding emoji
                         await message.add_reaction(self.get_emoji(digit))
-            # TODO: Move to shared func
+                # TODO: Move to shared func
+
+                # SauceNAO integration
+                logging.debug("Fetching sauce info")
+                sauce_info = await self.get_sauce_info(attachment.url)
+                if sauce_info["source"]:
+                    confirmation_message = await message.reply(
+                        f"Found author: `{sauce_info['author']}` and source: <{sauce_info['source']}> for post `{post_id}` via SauceNAO.\n"
+                        f"Please react with ✅ to confirm or ❌ if incorrect!"
+                    )
+
+                    await confirmation_message.add_reaction("✅")
+                    await confirmation_message.add_reaction("❌")
+                else:
+                    logging.warning(
+                        f"SauceNAO couldn't find source for {attachment.url}"
+                    )
 
         # Increment image count
         ic = retrieve_key("image_count", 1)
@@ -487,6 +506,84 @@ class Booru(commands.Cog, name="BooruCog"):
     # ==================================================
     # End Feature enable/disable
     # ==================================================
+
+    # Sauce NAO Integration stuff
+
+    async def get_sauce_info(self, image_url: str) -> dict:
+        """
+        Retrieves author and source information from SauceNAO.
+        """
+        try:
+            results = self.sauce.from_url(image_url)
+            if results and results[0].similarity >= 80:
+                author = results[0].author or "Unknown"
+                source = results[0].urls[0] if results[0].urls else "No source found"
+                return {"author": author.replace(" ", "_"), "source": source}
+        except SauceNaoApiError as e:
+            logging.error(f"SauceNAO error: {e}")
+        return {"author": None, "source": None}
+
+    def parse_confirmation_message(self, content):
+        pattern = r"Found author: `(?P<author>.+?)` and source: <(?P<source>.+?)> for post `(?P<post_id>\d+)`"
+        match = re.search(pattern, content)
+        if not match:
+            raise ValueError("Message content does not match the expected format.")
+
+        return match.group("author"), match.group("source"), match.group("post_id")
+
+    @commands.Cog.listener()
+    async def on_reaction_add(self, reaction, user):
+        """
+        Handles reactions for SauceNAO confirmations.
+        """
+
+        # Ignore bot reactions
+        if user.bot:
+            return
+
+        # Ensure the message reacted to was sent by the bot
+        if reaction.message.author != self.bot.user:
+            return
+
+        # Get the referenced message (OP's message)
+        if reaction.message.reference is None:
+            logging.warning("No referenced message; cannot determine the OP.")
+            return
+
+        original_message = reaction.message.reference.resolved
+        if original_message.author != user:
+            logging.info(f"Ignoring reaction from non-OP user {user}.")
+            return
+
+        # Extract details from the message
+        try:
+            author, source, post_id = self.parse_confirmation_message(
+                reaction.message.content
+            )
+            logging.info(
+                f"Parsed confirmation message: author={author}, source={source}, post_id={post_id}"
+            )
+        except ValueError as e:
+            logging.warning(
+                f"Failed to parse confirmation message: {message.content}. Error: {e}"
+            )
+            return
+
+        # Process reaction
+        if reaction.emoji == "✅":
+            # Append the tags and source to the post
+            booru_scripts.append_source_to_post(
+                post_id, source, self.api_url, self.api_key, self.api_user
+            )
+            booru_scripts.append_post_tags(
+                post_id, f"art:{author}", self.api_url, self.api_key, self.api_user
+            )
+            logging.info(f"Tags and source confirmed for {post_id}!")
+        elif reaction.emoji == "❌":
+            logging.warn(f"Tags and source rejected for {post_id}. :(")
+
+        # Clean up the confirmation message
+        await reaction.message.delete()
 
 
 async def setup(bot):

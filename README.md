@@ -111,3 +111,12 @@ This means 2 things,
 2) The bot can live on *your* servers now! Since configuration is now done on a per-guild basis
 
 PM me for the bot invite!
+
+
+## Changelog 13
+
+Bot will no longer reply 💎 when auto-upload is not enabled for a channel.
+
+SauceNAO now configured for auto-upload with enhanced confirmation! (feedback welcome)
+
+Fixed a few background task regressions.

@@ -294,7 +294,9 @@ class BackgroundBooru(commands.Cog, name="BooruBackgroundCog"):
         )
 
         if len(guilds_with_maintenance_enabled) == 0:
-            logging.warn("Error! No guilds configured to receive the booru maintenance!")
+            logging.warn(
+                "Error! No guilds configured to receive the booru maintenance!"
+            )
             return
 
         changes = []
@@ -344,8 +346,8 @@ class BackgroundBooru(commands.Cog, name="BooruBackgroundCog"):
 
         if changes:
             for guild_id in guilds_with_maintenance_enabled:
-                maintenance_channel_id = feature_data.get("feature_variables")
                 feature_data = get_feature_data(guild_id, "booru_maintenance")
+                maintenance_channel_id = feature_data.get("feature_variables")
                 if not maintenance_channel_id:
                     continue
 
