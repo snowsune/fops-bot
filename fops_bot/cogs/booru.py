@@ -160,18 +160,6 @@ class Booru(commands.Cog, name="BooruCog"):
         if message.author.bot or not message.attachments:
             return
 
-        # Cant process more than one at a time!
-        if len(message.attachments) > 1:
-            logging.info("Too many attachments")
-            await message.add_reaction("🤹‍♂️")
-            return
-
-        # Must be an image
-        if not message.attachments[0].content_type.startswith("image/"):
-            logging.warn("Attachment is not an image?")
-            await message.add_reaction("❌")
-            return
-
         # Auto upload list is pulled from the features database
         auto_upload_list = (
             get_feature_data(message.guild.id, "booru_auto_upload")
@@ -182,6 +170,18 @@ class Booru(commands.Cog, name="BooruCog"):
             logging.info(
                 f"Not uploading image in {message.channel.id}, not in list {auto_upload_list}"
             )
+            return
+
+        # Cant process more than one at a time!
+        if len(message.attachments) > 1:
+            logging.info("Too many attachments")
+            await message.add_reaction("🤹‍♂️")
+            return
+
+        # Must be an image
+        if not message.attachments[0].content_type.startswith("image/"):
+            logging.warn("Attachment is not an image?")
+            await message.add_reaction("❌")
             return
 
         # Get attachment
