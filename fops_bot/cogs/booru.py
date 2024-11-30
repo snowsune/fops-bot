@@ -576,7 +576,12 @@ class Booru(commands.Cog, name="BooruCog"):
                 post_id, source, self.api_url, self.api_key, self.api_user
             )
             booru_scripts.append_post_tags(
-                post_id, f"art:{author}", self.api_url, self.api_key, self.api_user
+                post_id=post_id,
+                new_tags=f"art:{author}",
+                api_url=self.api_url,
+                api_key=self.api_key,
+                username=self.api_user,
+                clear_tags=["missing_artist", "missing_source"],
             )
             logging.info(f"Tags and source confirmed for {post_id}!")
         elif reaction.emoji == "❌":
