@@ -578,7 +578,7 @@ class Booru(commands.Cog, name="BooruCog"):
             booru_scripts.append_post_tags(
                 post_id=post_id,
                 new_tags=f"art:{author}",
-                api_url=self.api_url,
+                danbooru_url=self.api_url,
                 api_key=self.api_key,
                 username=self.api_user,
                 clear_tags=["missing_artist", "missing_source"],
