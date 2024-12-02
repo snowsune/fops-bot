@@ -14,18 +14,24 @@ import discord
 from discord import Intents, app_commands
 from discord.ext import commands
 
-from .utilities.migrations import init_migrations
+from alembic.config import Config
+from alembic import command
 
 
-def init_db():
+def apply_migrations() -> bool:
+    logging.info("Configuring alembic..")
+    alembic_cfg = Config("alembic.ini")
+
     try:
-        # Initialize and run migrations
-        init_migrations()
-        logging.info("Database initialized and migrations applied successfully.")
-        return True
-    except Exception as e:
-        logging.exception(f"Database initialization failed: {e}")
-        return False
+        logging.info("Starting Alembic upgrade...")
+        command.upgrade(alembic_cfg, "head")
+        logging.info("Alembic upgrade finished successfully!")
+    finally:
+        from sqlalchemy.orm import close_all_sessions
+
+        close_all_sessions()
+
+    return True
 
 
 class FopsBot:
@@ -76,8 +82,8 @@ class FopsBot:
 
         # DB Setup
         try:
-            logging.info("Configuring DB and running migrations")
-            self.dbReady = init_db()
+            logging.info("Configuring DB")
+            self.dbReady = apply_migrations()
         except Exception as e:
             logging.error(f"Could not configure the DB! Error was {e}")
             self.dbReady = False
@@ -94,6 +100,7 @@ class FopsBot:
                     await self.bot.load_extension(f"cogs.{filename[:-3]}")
                 except Exception as e:
                     logging.fatal(f"Error loading {filename} as a cog, error: {e}")
+                    raise e
         logging.info("Done loading cogs")
 
     async def on_ready(self):

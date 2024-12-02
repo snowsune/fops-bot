@@ -2,25 +2,25 @@ import discord
 import logging
 import random
 import asyncio
+
 from discord import app_commands
 from discord.ext import commands, tasks
 from datetime import datetime
 
 from utilities.common import seconds_until
 
-from utilities.features import (
-    is_feature_enabled,
-    set_feature_state,
-    get_feature_data,
-    get_guilds_with_feature_enabled,
-)
 
-from utilities.database import store_key, retrieve_key
+from fops_bot.database.database import Session
+from fops_bot.database.database import KeyValueStore as kvs
 
 
 class ToolCog(commands.Cog, name="ToolsCog"):
     def __init__(self, bot):
         self.bot = bot
+
+        # DB Session
+        self.session = Session()
+
         self.command_counter = 0  # Initialize a command counter
         self.start_time = datetime.now()  # Track when the bot started
 
@@ -86,14 +86,14 @@ class ToolCog(commands.Cog, name="ToolsCog"):
         try:
             if True:
                 try:
-                    vc = retrieve_key("version_count", 0)
+                    vc = kvs.retrieve_key(self.session, "version_count", 0)
                     logging.info(f"Retrieved vc as {vc}")
                     dbstatus = "Ready"
                 except Exception as e:
                     logging.error(f"Error retrieving key, error was {e}")
                     dbstatus = "Not Ready (connected but cant retrieve now)"
 
-                store_key("version_count", int(vc) + 1)
+                kvs.store_key(self.session, "version_count", int(vc) + 1)
             else:
                 dbstatus = "Not Ready"
         except Exception as e:

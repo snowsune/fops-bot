@@ -4,6 +4,25 @@ Theres lots of stuff here i dont want you to scan or parse at all!
 
 blah blah blah
 
+# Notes for development
+
+## Python Alembic
+
+I used pipenv to make an env where i can run alembic commands on the host
+
+```shell
+$ pipenv install -r requirements/requirements.txt
+$ pipenv shell
+```
+
+then you can run some alembic commands to auto-generate the migrations
+
+```shell
+$ alembic revision --autogenerate -m "my migration"
+```
+
+Thats mostly all!
+
 
 # Changelog
 
