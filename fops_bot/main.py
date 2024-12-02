@@ -17,15 +17,14 @@ from discord.ext import commands
 from .utilities.migrations import init_migrations
 
 
-def init_db():
-    try:
-        # Initialize and run migrations
-        init_migrations()
-        logging.info("Database initialized and migrations applied successfully.")
-        return True
-    except Exception as e:
-        logging.exception(f"Database initialization failed: {e}")
-        return False
+def apply_migrations() -> bool:
+    logging.info("Configuring alembic..")
+    alembic_cfg = Config("alembic.ini")
+
+    logging.info("Applying migrations...")
+    command.upgrade(alembic_cfg, "head")
+
+    return True
 
 
 class FopsBot:
@@ -76,8 +75,8 @@ class FopsBot:
 
         # DB Setup
         try:
-            logging.info("Configuring DB and running migrations")
-            self.dbReady = init_db()
+            logging.info("Configuring DB")
+            self.dbReady = apply_migrations
         except Exception as e:
             logging.error(f"Could not configure the DB! Error was {e}")
             self.dbReady = False
