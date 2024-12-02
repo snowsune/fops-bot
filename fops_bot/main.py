@@ -14,7 +14,8 @@ import discord
 from discord import Intents, app_commands
 from discord.ext import commands
 
-from .utilities.migrations import init_migrations
+from alembic.config import Config
+from alembic import command
 
 
 def apply_migrations() -> bool:
@@ -76,7 +77,7 @@ class FopsBot:
         # DB Setup
         try:
             logging.info("Configuring DB")
-            self.dbReady = apply_migrations
+            self.dbReady = apply_migrations()
         except Exception as e:
             logging.error(f"Could not configure the DB! Error was {e}")
             self.dbReady = False

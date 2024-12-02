@@ -9,6 +9,7 @@
 !setup.py
 !README.md
 !LICENSE
+!alembic.ini
 
 # Testing
 !tests/
