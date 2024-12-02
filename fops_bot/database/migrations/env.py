@@ -1,12 +1,17 @@
 import os
+import sqlalchemy
+
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
+from sqlalchemy import engine_from_config, pool
 
 from alembic import context
 
 from fops_bot.database.database import Base
+
+import logging
+
+logging.basicConfig(level=logging.DEBUG)
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -71,6 +76,10 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
+        # Set the statement timeout
+        connection.execute(sqlalchemy.text("SET statement_timeout = '5s'"))
+
+        # Configure for meta
         context.configure(connection=connection, target_metadata=target_metadata)
 
         with context.begin_transaction():

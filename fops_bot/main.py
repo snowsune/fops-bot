@@ -22,8 +22,14 @@ def apply_migrations() -> bool:
     logging.info("Configuring alembic..")
     alembic_cfg = Config("alembic.ini")
 
-    logging.info("Applying migrations...")
-    command.upgrade(alembic_cfg, "head")
+    try:
+        logging.info("Starting Alembic upgrade...")
+        command.upgrade(alembic_cfg, "head")
+        logging.info("Alembic upgrade finished successfully!")
+    finally:
+        from sqlalchemy.orm import close_all_sessions
+
+        close_all_sessions()
 
     return True
 
@@ -94,6 +100,7 @@ class FopsBot:
                     await self.bot.load_extension(f"cogs.{filename[:-3]}")
                 except Exception as e:
                     logging.fatal(f"Error loading {filename} as a cog, error: {e}")
+                    raise e
         logging.info("Done loading cogs")
 
     async def on_ready(self):
