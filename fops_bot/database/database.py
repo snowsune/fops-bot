@@ -15,10 +15,10 @@ DB_HOST = os.getenv("DB_HOST", "localhost")
 DB_PORT = os.getenv("DB_PORT", "5438")
 DB_NAME = os.getenv("DB_NAME", "fops_bot_db")
 
-DATABASE_URL = f"postgresql+psycopg://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+db_url = f"postgresql+psycopg://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
 # Initialize the engine and session
-engine = create_engine(DATABASE_URL)
+engine = create_engine(db_url)
 Session = sessionmaker(bind=engine)
 
 

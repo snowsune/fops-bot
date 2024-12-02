@@ -48,8 +48,8 @@ def run_migrations_offline() -> None:
 
     Calls to context.execute() here emit the given string to the
     script output.
-
     """
+
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
         url=url,
@@ -68,11 +68,7 @@ def run_migrations_online() -> None:
     # Log the connection URL for debugging
     logging.debug("Database URL: %s", config.get_main_option("sqlalchemy.url"))
 
-    connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-    )
+    connectable = sqlalchemy.create_engine(db_url, poolclass=pool.NullPool)
 
     with connectable.connect() as connection:
         # Log the database server version for verification
