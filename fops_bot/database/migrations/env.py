@@ -29,10 +29,10 @@ DB_HOST = os.getenv("DB_HOST", "localhost")
 DB_PORT = os.getenv("DB_PORT", "5438")
 DB_NAME = os.getenv("DB_NAME", "fops_bot_db")
 
-config.set_main_option(
-    "sqlalchemy.url",
-    f"postgresql+psycopg://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}",
-)
+db_url = f"postgresql+psycopg://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+config.set_main_option("sqlalchemy.url", db_url)
+
+logging.debug("Final DB URL: %s", db_url)
 
 # Model metadata object
 target_metadata = Base.metadata
@@ -63,12 +63,11 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    """Run migrations in 'online' mode.
+    """Run migrations in 'online' mode."""
 
-    In this scenario we need to create an Engine
-    and associate a connection with the context.
+    # Log the connection URL for debugging
+    logging.debug("Database URL: %s", config.get_main_option("sqlalchemy.url"))
 
-    """
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
@@ -76,10 +75,16 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
+        # Log the database server version for verification
+        server_version = connection.execute(
+            sqlalchemy.text("SELECT version();")
+        ).scalar()
+        logging.debug("Connected to DB server version: %s", server_version)
+
         # Set the statement timeout
         connection.execute(sqlalchemy.text("SET statement_timeout = '5s'"))
 
-        # Configure for meta
+        # Configure for migrations
         context.configure(connection=connection, target_metadata=target_metadata)
 
         with context.begin_transaction():
@@ -87,6 +92,7 @@ def run_migrations_online() -> None:
 
 
 if context.is_offline_mode():
+    logging.warning("Alembic in offline mode!")
     run_migrations_offline()
 else:
     run_migrations_online()
