@@ -120,3 +120,8 @@ Bot will no longer reply 💎 when auto-upload is not enabled for a channel.
 SauceNAO now configured for auto-upload with enhanced confirmation! (feedback welcome)
 
 Fixed a few background task regressions.
+
+
+## Changelog 14
+
+Removed/unhooked booru functions from the main bot.

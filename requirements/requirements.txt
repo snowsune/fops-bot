@@ -7,3 +7,5 @@ pytz
 python_weather
 pyyaml
 psycopg[binary]
+pillow
+opencv-python
