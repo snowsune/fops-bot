@@ -21,6 +21,21 @@ def browsing_fox_task(input_image: Image.Image) -> Image.Image:
     return result
 
 
+@register_image_task("Fox-Top", requires_attachment=True)
+def browsing_fox_task(input_image: Image.Image) -> Image.Image:
+    frame = Image.open("fops_bot/templates/foxtop.png")
+
+    # Get image dimensions from frame
+    base_x, base_y = frame.size
+
+    result = generate_underlay(
+        base_x, base_y, (110, 155), (260, 136), (267, 240), (119, 275), input_image
+    )
+
+    result.paste(frame, (0, 0), frame)
+    return result
+
+
 @register_image_task("Vixi Says", requires_attachment=False)
 def vixi_says_task(message: str) -> Image.Image:
     logging.info(f"Processing vixisays with message: {message}")
