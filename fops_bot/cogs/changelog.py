@@ -88,7 +88,9 @@ class Changelog(commands.Cog, name="ChangeLogCog"):
                 continue
 
             # Replace any placeholders in the changelog text
-            cur_logstr_formatted = cur_logstr.replace("{{version}}", self.bot.version)
+            cur_logstr_formatted = f"# Changelog {cur_lognum}\n" + cur_logstr.replace(
+                "{{version}}", self.bot.version
+            )
 
             # Post the changelog
             await channel.send(cur_logstr_formatted)

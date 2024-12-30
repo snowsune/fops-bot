@@ -1,6 +1,10 @@
 import cv2
+import logging
+import textwrap
 import numpy as np
-from PIL import Image
+
+
+from PIL import Image, ImageDraw, ImageFont
 
 
 def generate_underlay(
@@ -57,3 +61,48 @@ def generate_underlay(
     # Convert back to PIL for return
     final_image = Image.fromarray(cv2.cvtColor(result, cv2.COLOR_BGR2RGB))
     return final_image
+
+
+def fit_text_to_region(
+    draw: ImageDraw.Draw,
+    text: str,
+    region: tuple,
+    font_path: str,
+    max_font_size: int = 100,
+) -> (tuple, str):
+    """
+    Fit text to a specified rectangular region with simple line wrapping.
+
+    Args:
+        draw (ImageDraw.Draw): ImageDraw instance for the image.
+        text (str): Text to render.
+        region (tuple): (x, y, width, height) defining the region.
+        font_path (str): Path to the font file.
+        max_font_size (int): Maximum font size to attempt.
+
+    Returns:
+        tuple: (ImageFont.FreeTypeFont, str) The best fitting font and wrapped text.
+    """
+
+    x, y, width, height = region
+    font_size = max_font_size
+
+    lines = textwrap.fill(text, width=24)
+
+    logging.info(f"The text is {lines}")
+
+    while font_size > 0:
+        font = ImageFont.truetype(font_path, font_size)
+
+        bbox = draw.textbbox((0, 0), lines, font=font)
+        text_width = bbox[2] - bbox[0]
+        text_height = bbox[3] - bbox[1]
+
+        if text_width <= width and text_height <= height:
+            return font, lines
+        font_size -= 1
+
+    return (
+        ImageFont.truetype(font_path, 1),
+        lines,
+    )  # Default to smallest font if none fits

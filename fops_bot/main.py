@@ -94,6 +94,7 @@ class FopsBot:
                     await self.bot.load_extension(f"cogs.{filename[:-3]}")
                 except Exception as e:
                     logging.fatal(f"Error loading {filename} as a cog, error: {e}")
+                    raise e
         logging.info("Done loading cogs")
 
     async def on_ready(self):

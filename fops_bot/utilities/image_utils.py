@@ -1,41 +1,48 @@
 import io
 import logging
 
-from PIL import Image, UnidentifiedImageError
+from PIL import Image, UnidentifiedImageError, ImageDraw
 from typing import Callable, Dict
 
 # Registry for image manipulation tasks
 IMAGE_TASKS: Dict[str, Callable[[Image.Image], Image.Image]] = {}
 
 
-def register_image_task(name: str):
+def register_image_task(name: str, requires_attachment: bool = True):
     """
     Decorator to register an image task.
 
     :param name: The name of the task.
+    :param requires_attachment: Whether the task requires an image attachment.
     """
 
-    def decorator(func: Callable[[Image.Image], Image.Image]):
-        IMAGE_TASKS[name] = func
+    def decorator(func: Callable[..., Image.Image]):
+        IMAGE_TASKS[name] = {
+            "func": func,
+            "requires_attachment": requires_attachment,
+        }
+        logging.info(
+            f"Registered task '{name}' (Attachment Required: {requires_attachment})"
+        )
         return func
-
-    logging.info(f"Decorated {name} as registered image task.")
 
     return decorator
 
 
-def apply_image_task(image: Image.Image, task_name: str) -> Image.Image:
+def apply_image_task(task_name: str, *args, **kwargs) -> Image.Image:
     """
-    Apply a registered image task to the given image.
+    Apply a registered image task.
 
-    :param image: The input image.
     :param task_name: The task to apply.
+    :param args: Arguments to pass to the task.
+    :param kwargs: Keyword arguments to pass to the task.
     :return: The resulting image.
     """
     if task_name not in IMAGE_TASKS:
         raise ValueError(f"Task '{task_name}' is not registered.")
 
-    return IMAGE_TASKS[task_name](image)
+    task_func = IMAGE_TASKS[task_name]["func"]
+    return task_func(*args, **kwargs)
 
 
 def load_image_from_bytes(image_bytes: bytes) -> Image.Image:

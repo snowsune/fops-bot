@@ -125,3 +125,10 @@ Fixed a few background task regressions.
 ## Changelog 14
 
 Removed/unhooked booru functions from the main bot.
+
+
+## Changelog 15
+
+Added `/invite_bot` command.
+Improved the `Browsing Fox` app command (right click image)
+Added the `Vixi Says` app command (right click text)

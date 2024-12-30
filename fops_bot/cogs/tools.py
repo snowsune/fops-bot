@@ -75,6 +75,13 @@ class ToolCog(commands.Cog, name="ToolsCog"):
         # Restart the loop to wait for the next midnight
         self.reset_counter_task.restart()
 
+    @app_commands.command(name="invite_bot")
+    async def invite_bot(self, ctx: discord.Interaction):
+        await ctx.response.send_message(
+            f"Use this link to invite me to your server!\nhttps://discord.com/oauth2/authorize?client_id=983461462896963744",
+            ephemeral=True,
+        )
+
     @app_commands.command(name="version")
     async def version(self, ctx: discord.Interaction):
         """

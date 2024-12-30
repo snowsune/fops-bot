@@ -8,6 +8,7 @@ from utilities.image_utils import (
     apply_image_task,
     load_image_from_bytes,
     save_image_to_bytes,
+    IMAGE_TASKS,
 )
 
 from typing import Optional, Callable
@@ -58,33 +59,47 @@ class ImageCog(commands.Cog):
         """
         Process the image using the selected task.
         """
-        if not message:
+
+        task_metadata = IMAGE_TASKS.get(task_name)
+        if not task_metadata:
             await interaction.response.send_message(
-                "No message to process!", ephemeral=True
+                f"Task '{task_name}' is not registered.", ephemeral=True
             )
             return
 
-        if not message.attachments:
-            await interaction.response.send_message(
-                "No image attached to this message!", ephemeral=True
-            )
-            return
-
-        attachment = message.attachments[0]
-
-        if not attachment.content_type.startswith("image/"):
-            await interaction.response.send_message(
-                "The attachment is not an image!", ephemeral=True
-            )
-            return
+        requires_attachment = task_metadata.get("requires_attachment", True)
 
         await interaction.response.defer()  # Acknowledge the interaction
-        image_bytes = await attachment.read()
 
         try:
-            # Process the image
-            input_image = load_image_from_bytes(image_bytes)
-            output_image = apply_image_task(input_image, task_name)
+            if requires_attachment:
+                if not message or not message.attachments:
+                    await interaction.followup.send(
+                        "This task requires an image attachment!", ephemeral=True
+                    )
+                    return
+
+                attachment = message.attachments[0]
+
+                if not attachment.content_type.startswith("image/"):
+                    await interaction.followup.send(
+                        "The attachment is not an image!", ephemeral=True
+                    )
+                    return
+
+                image_bytes = await attachment.read()
+                input_image = load_image_from_bytes(image_bytes)
+                output_image = apply_image_task(task_name, input_image)
+            else:
+                # Handle text-based tasks
+                if not message or not message.content:
+                    await interaction.followup.send(
+                        "This task requires a text message!", ephemeral=True
+                    )
+                    return
+
+                output_image = apply_image_task(task_name, message.content)
+
             output_bytes = save_image_to_bytes(output_image)
 
             # Send the result
@@ -92,10 +107,11 @@ class ImageCog(commands.Cog):
                 file=discord.File(io.BytesIO(output_bytes), f"{task_name}.png")
             )
         except Exception as e:
-            logging.error(f"Error processing image task '{task_name}': {e}")
+            logging.error(f"Error processing task '{task_name}': {e}")
             await interaction.followup.send(
-                "Failed to process the image.", ephemeral=True
+                "Failed to process the task.", ephemeral=True
             )
+            raise e
 
     async def cog_unload(self):
         """
