@@ -61,3 +61,25 @@ def vixi_says_task(message: str) -> Image.Image:
     draw.text((x, y), lines, font=font, fill=(255, 255, 255))
 
     return frame
+
+
+@register_image_task("Soy Point", requires_attachment=True)
+def browsing_fox_task(input_image: Image.Image) -> Image.Image:
+    frame = Image.open("fops_bot/templates/soy.png")
+
+    # Get image dimensions from frame
+    base_x, base_y = frame.size
+
+    result = generate_underlay(
+        base_x,
+        base_y,
+        (1250, 700),  # Top Left
+        (2960, 700),  # Top Right
+        (2960, 2000),  # Bottom Right
+        (1250, 2000),  # Bottom Left
+        input_image,
+        alpha=True,
+    )
+
+    result.paste(frame, (0, 0), frame)
+    return result

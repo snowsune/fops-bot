@@ -132,3 +132,8 @@ Removed/unhooked booru functions from the main bot.
 Added `/invite_bot` command.
 Improved the `Browsing Fox` app command (right click image)
 Added the `Vixi Says` app command (right click text)
+
+## Changelog 16
+
+Added `soy-point` command.
+Fixed some misc bugs <3

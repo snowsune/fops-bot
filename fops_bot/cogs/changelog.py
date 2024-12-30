@@ -43,7 +43,7 @@ class Changelog(commands.Cog, name="ChangeLogCog"):
 
     @commands.Cog.listener()
     async def on_ready(self):
-        self.last_log = retrieve_key("LAST_CHANGELOG", 0)
+        self.last_log = int(retrieve_key("LAST_CHANGELOG", 0))
 
         changelog_path = "/app/README.md"
 
@@ -53,11 +53,11 @@ class Changelog(commands.Cog, name="ChangeLogCog"):
         cur_lognum = int(_d[0])
         cur_logstr = _d[1]
 
-        logging.debug(
+        logging.info(
             f"Changelog is currently {cur_lognum}/{self.last_log}. Content was: {cur_logstr}"
         )
 
-        if cur_lognum == int(self.last_log):
+        if cur_lognum == self.last_log:
             # If they match, we're done and we can pack up
             logging.info("No new changelog to report.")
             return
@@ -93,7 +93,13 @@ class Changelog(commands.Cog, name="ChangeLogCog"):
             )
 
             # Post the changelog
-            await channel.send(cur_logstr_formatted)
+            try:
+                await channel.send(cur_logstr_formatted)
+            except discord.errors.Forbidden as e:
+                logging.warning(
+                    f"When posting changelog got forbidden/lost ch. {e}. Removing from db."
+                )
+                set_feature_state(guild_id, "changelog_alert", False)
 
         # Update the db after posting
         store_key("LAST_CHANGELOG", cur_lognum)
