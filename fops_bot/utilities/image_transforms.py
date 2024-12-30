@@ -89,8 +89,6 @@ def fit_text_to_region(
 
     lines = textwrap.fill(text, width=24)
 
-    logging.info(f"The text is {lines}")
-
     while font_size > 0:
         font = ImageFont.truetype(font_path, font_size)
 
