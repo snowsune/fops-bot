@@ -15,6 +15,7 @@ class VideoExtractor:
         self.message_content = _content
         self.output_dir = "/tmp/ytdlp_output"
         self.compressed_file = None
+        self.file_path = None
 
     def __enter__(self) -> Optional[str]:
         logging.info(f"Video Extractor Processing {self.message_content}")
@@ -61,8 +62,12 @@ class VideoExtractor:
         self.file_path = os.path.join(self.output_dir, files[0])
 
         # If we succeed, return this object
-        if os.path.isfile(self.file_path):
-            return self
+        try:
+            if os.path.isfile(self.file_path):
+                return self
+        except Exception as e:
+            logging.warn(f"TODO: bug in video extractor lol {e}")
+            pass
         return None
 
     def path(self):
@@ -115,10 +120,11 @@ class VideoExtractor:
         return self.file_path
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        if os.path.isfile(self.file_path):
-            os.remove(self.file_path)
-        if self.compressed_file and os.path.isfile(self.compressed_file):
-            os.remove(self.compressed_file)
+        if self.file_path:
+            if os.path.isfile(self.file_path):
+                os.remove(self.file_path)
+            if self.compressed_file and os.path.isfile(self.compressed_file):
+                os.remove(self.compressed_file)
         os.rmdir(self.output_dir)
 
 
@@ -143,6 +149,7 @@ class YTDLP(commands.Cog):
             "x.com": "Twitter",
             "fixupx.com": "Twitter",
             "fxtwitter.com": "Twitter",
+            "twitter.com": "Twitter",
             "tiktok.com": "TikTok",
             "youtube.com": "YouTube",
             "youtu.be": "YouTube",
@@ -173,9 +180,9 @@ class YTDLP(commands.Cog):
 
         # Use the VideoExtractor to download the media
         with VideoExtractor(message.content) as video:
-            if video is not None:
+            if video != None:
                 video_path = video.path()
-                if video_path is not None:
+                if video_path != None:
                     try:
                         await message.reply(file=discord.File(video_path))
                     except discord.errors.HTTPException:
@@ -191,10 +198,35 @@ class YTDLP(commands.Cog):
                 else:
                     await message.add_reaction("❌")
             else:
+                logging.warning(f"Video couldn't be extracted for {message.content}")
                 await message.add_reaction("⚠️")  # Warn about failure
 
         # Remove the hourglass reaction after processing
         await message.clear_reaction("⏳")
+
+        # SPECIAL CASE BECAUSE OF TWITTER AND CSAM
+        twitter_domains = {
+            "x.com",
+            "fixupx.com",
+            "fxtwitter.com",
+            "vxtwitter.com",
+            "twitter.com",
+        }
+
+        if domain in twitter_domains:
+            try:
+                # Check if any media was extracted, if not, post a warning message
+                if video is None or video.path() is None:
+                    await message.channel.send(
+                        f"{message.author.mention} Twitter video deleted for server compliance."
+                    )
+
+                # Delete the original message
+                await message.delete()
+            except discord.errors.Forbidden:
+                logging.warning("Bot lacks permissions to delete messages.")
+            except discord.errors.NotFound:
+                logging.warning("Message was already deleted.")
 
 
 async def setup(bot):
