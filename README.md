@@ -137,3 +137,8 @@ Added the `Vixi Says` app command (right click text)
 
 Added `soy-point` command.
 Fixed some misc bugs <3
+
+## Changelog 17
+
+Added a new `Vixi Thinks` context command!
+Check it out!
