@@ -7,7 +7,23 @@ import shutil
 from typing import Optional
 from discord.ext import commands
 
+from urllib.parse import urlparse, urlunparse
+
 DISCORD_FILE_SIZE_LIMIT = 8 * 1024 * 1024  # 8MB limit for Discord uploads
+
+
+def convert_twitter_link_to_alt(
+    original_url: str, alt_domain: str = "fxtwitter.com"
+) -> str:
+    try:
+        parsed = urlparse(original_url)
+        if parsed.netloc in {"x.com", "twitter.com"}:
+            # Replace the domain only
+            new_url = parsed._replace(netloc=alt_domain)
+            return urlunparse(new_url)
+    except Exception as e:
+        logging.warning(f"URL parse error: {e}")
+    return original_url
 
 
 class VideoExtractor:
@@ -178,11 +194,17 @@ class YTDLP(commands.Cog):
         # React with an hourglass to indicate processing
         await message.add_reaction("⏳")
 
+        # SPECIAL CASE BECAUSE OF TWITTER AND CSAM
+        twitter_domains = {
+            "x.com",
+            "twitter.com",
+        }
+
         # Use the VideoExtractor to download the media
         with VideoExtractor(message.content) as video:
             if video != None:
                 video_path = video.path()
-                if video_path != None:
+                if video_path != None and domain not in twitter_domains:
                     try:
                         await message.reply(file=discord.File(video_path))
                     except discord.errors.HTTPException:
@@ -204,25 +226,38 @@ class YTDLP(commands.Cog):
         # Remove the hourglass reaction after processing
         await message.clear_reaction("⏳")
 
-        # SPECIAL CASE BECAUSE OF TWITTER AND CSAM
-        twitter_domains = {
-            "x.com",
-            "fixupx.com",
-            "fxtwitter.com",
-            "vxtwitter.com",
-            "twitter.com",
-        }
-
         if domain in twitter_domains:
             try:
-                # Check if any media was extracted, if not, post a warning message
-                if video is None or video.path() is None:
-                    await message.channel.send(
-                        f"{message.author.mention} Twitter video deleted for server compliance."
-                    )
+                # Always convert the link to fxtwitter.com
+                words = message.content.split()
+                for word in words:
+                    if "://" in word:
+                        alt_link = convert_twitter_link_to_alt(word.strip())
+                        break
+                else:
+                    alt_link = message.content
 
-                # Delete the original message
+                # Send alt link first
+                await message.channel.send(
+                    f"Originally posted by {message.author.mention}: {alt_link}"
+                )
+
+                # Delete original message no matter what
                 await message.delete()
+
+                # If a video was extracted, reply with it
+                if video and video.path():
+                    try:
+                        await message.channel.send(file=discord.File(video.path()))
+                    except discord.errors.HTTPException:
+                        compressed_path = video.compress_file()
+                        if compressed_path:
+                            await message.channel.send(
+                                "(File was compressed)",
+                                file=discord.File(compressed_path),
+                            )
+                        else:
+                            await message.channel.send("❌ Media too large to post.")
             except discord.errors.Forbidden:
                 logging.warning("Bot lacks permissions to delete messages.")
             except discord.errors.NotFound:
