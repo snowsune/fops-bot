@@ -5,17 +5,17 @@ import asyncio
 from discord import app_commands
 from discord.ext import commands, tasks
 from datetime import datetime
+from typing import Optional, cast
 
 from utilities.common import seconds_until
-
-from utilities.features import (
+from utilities.db_ops import (
+    store_key,
+    retrieve_key,
     is_feature_enabled,
     set_feature_state,
     get_feature_data,
     get_guilds_with_feature_enabled,
 )
-
-from utilities.database import store_key, retrieve_key
 
 
 class ToolCog(commands.Cog, name="ToolsCog"):
@@ -93,14 +93,14 @@ class ToolCog(commands.Cog, name="ToolsCog"):
         try:
             if True:
                 try:
-                    vc = retrieve_key("version_count", 0)
+                    vc = retrieve_key("version_count", "0")
                     logging.info(f"Retrieved vc as {vc}")
                     dbstatus = "Ready"
                 except Exception as e:
                     logging.error(f"Error retrieving key, error was {e}")
                     dbstatus = "Not Ready (connected but cant retrieve now)"
 
-                store_key("version_count", int(vc) + 1)
+                store_key("version_count", str(int(vc or "0") + 1))
             else:
                 dbstatus = "Not Ready"
         except Exception as e:
@@ -117,7 +117,7 @@ class ToolCog(commands.Cog, name="ToolsCog"):
         """
         Enable or disable NSFW commands for the entire guild.
         """
-        guild_id = interaction.guild_id
+        guild_id = cast(int, interaction.guild_id)  # Cast to ensure non-None
         set_feature_state(guild_id, "enable_nsfw", state, feature_variables=None)
 
         status = "enabled" if state else "disabled"
@@ -131,7 +131,7 @@ class ToolCog(commands.Cog, name="ToolsCog"):
         """
         Pings the admin-configured channel.
         """
-        guild_id = ctx.guild_id
+        guild_id = cast(int, ctx.guild_id)  # Cast to ensure non-None
 
         # Get feature data (enabled status and variables) for this guild
         feature_data = get_feature_data(guild_id, "admin_ping")
@@ -170,7 +170,7 @@ class ToolCog(commands.Cog, name="ToolsCog"):
         """
         Enables the admin ping feature and sets the channel.
         """
-        guild_id = ctx.guild_id
+        guild_id = cast(int, ctx.guild_id)  # Cast to ensure non-None
 
         # Enable the admin_ping feature for this guild and set the channel
         set_feature_state(guild_id, "admin_ping", True, str(channel.id))
@@ -186,7 +186,7 @@ class ToolCog(commands.Cog, name="ToolsCog"):
         """
         Disables the admin ping feature.
         """
-        guild_id = ctx.guild_id
+        guild_id = cast(int, ctx.guild_id)  # Cast to ensure non-None
 
         # Disable the admin_ping feature for this guild
         set_feature_state(guild_id, "admin_ping", False)
