@@ -133,3 +133,14 @@ def retrieve_key(key: str, default: Optional[str] = None) -> Optional[str]:
                 logging.warning(f"Inserting default {default} into key {key}")
             return default
         return cast(str, kv.value)
+
+
+def store_number(key: str, value: int) -> None:
+    """Store a numeric value."""
+    store_key(key, str(value))
+
+
+def retrieve_number(key: str, default: int = 0) -> int:
+    """Retrieve a numeric value by key."""
+    value = retrieve_key(key, str(default))
+    return int(value) if value is not None else default
