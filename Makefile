@@ -20,7 +20,11 @@ install-requirements: ## Install requirements (locally)
 
 build: ## Build container locally
 	# Generate tag
-	echo TAG=$(shell git rev-parse --abbrev-ref HEAD | sed 's/[^a-zA-Z0-9]/-/g') >> .env
+	@if grep -q '^TAG=' .env; then \
+		sed -i 's/^TAG=.*/TAG=$(shell git rev-parse --abbrev-ref HEAD | sed 's/[^a-zA-Z0-9]/-/g')/' .env; \
+	else \
+		echo TAG=$(shell git rev-parse --abbrev-ref HEAD | sed 's/[^a-zA-Z0-9]/-/g') >> .env; \
+	fi
 
 	# Build
 	docker-compose build --build-arg GIT_COMMIT=$(shell git describe --abbrev=8 --always --tags --dirty) --build-arg DEBUG=True
