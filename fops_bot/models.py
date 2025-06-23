@@ -55,6 +55,20 @@ class MigrationLog(Base):
     applied_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
+class Subscription(Base):
+    __tablename__ = "subscriptions"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    service_type = Column(String, nullable=False)  # e.g., 'FurAffinity', 'booru', 'e6'
+    user_id = Column(BigInteger, nullable=False)  # Discord user ID
+    subscribed_at = Column(
+        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
+    )
+    guild_id = Column(BigInteger, nullable=False)  # Discord guild ID
+    channel_id = Column(BigInteger, nullable=False)  # Discord channel ID
+    search_criteria = Column(String, nullable=False)  # Username or search string
+
+
 # Database connection setup
 def get_engine():
     db_url = os.getenv("DATABASE_URL")
