@@ -1,6 +1,5 @@
 discord.py
 discordhealthcheck
-saucenao_api
 requests
 lxml
 pytz
