@@ -125,6 +125,6 @@ jobs:
       - name: Discord notification
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-        uses: Ilshidur/action-discord@master
+        uses: ncatelli/action-discord@115-add-wait-parameter-prefix
         with:
           args: "Built and published a new Fops Bot docker image to `${{ env.CUSTOM_TAG }}`! Image size: `${{ env.IMAGE_SIZE }}`"
