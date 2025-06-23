@@ -67,6 +67,7 @@ class Subscription(Base):
     guild_id = Column(BigInteger, nullable=False)  # Discord guild ID
     channel_id = Column(BigInteger, nullable=False)  # Discord channel ID
     search_criteria = Column(String, nullable=False)  # Username or search string
+    last_reported_id = Column(String, nullable=True)  # Last reported post/submission ID
 
 
 # Database connection setup
