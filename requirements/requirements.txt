@@ -6,6 +6,9 @@ lxml
 pytz
 python_weather
 pyyaml
-psycopg[binary]
+psycopg2-binary
 pillow
 opencv-python
+sqlalchemy
+alembic
+colorlog

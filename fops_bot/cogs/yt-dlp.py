@@ -158,6 +158,7 @@ def message_contains(message: discord.Message, valid_domains: dict) -> Optional[
 class YTDLP(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.logger = logging.getLogger(__name__)
         self.valid_domains = {
             "instagram.com": "Instagram",
             "instagramez.com": "Instagram",
@@ -187,7 +188,7 @@ class YTDLP(commands.Cog):
         if not domain:
             return
 
-        logging.info(
+        self.logger.info(
             f'{self.valid_domains[domain]} Listener caught message "{message.content}"'
         )
 

@@ -6,8 +6,9 @@ import discord
 from discord import app_commands
 from discord.ext import commands, tasks
 
-from utilities.database import retrieve_key, store_key
-from utilities.features import (
+from utilities.database import (
+    retrieve_key_number,
+    store_key_number,
     get_feature_data,
     set_feature_state,
     get_guilds_with_feature_enabled,
@@ -40,26 +41,27 @@ class Changelog(commands.Cog, name="ChangeLogCog"):
     def __init__(self, bot):
         super().__init__()
         self.bot = bot
+        self.logger = logging.getLogger(__name__)
 
     @commands.Cog.listener()
     async def on_ready(self):
-        self.last_log = int(retrieve_key("LAST_CHANGELOG", 0))
+        self.last_log = retrieve_key_number("LAST_CHANGELOG", 0)
 
         changelog_path = "/app/README.md"
 
         # Crack the data we need
-        logging.info(f"Loading {changelog_path}")
+        self.logger.info(f"Loading {changelog_path}")
         _d = get_current_changelog(changelog_path)
         cur_lognum = int(_d[0])
         cur_logstr = _d[1]
 
-        logging.info(
+        self.logger.info(
             f"Changelog is currently {cur_lognum}/{self.last_log}. Content was: {cur_logstr}"
         )
 
         if cur_lognum == self.last_log:
             # If they match, we're done and we can pack up
-            logging.info("No new changelog to report.")
+            self.logger.info("No new changelog to report.")
             return
 
         # Now we need to notify all guilds that have changelog notifications enabled
@@ -75,14 +77,14 @@ class Changelog(commands.Cog, name="ChangeLogCog"):
             # Get the channel ID for the changelog alert
             channel_id = feature_data.get("feature_variables")
             if not channel_id:
-                logging.warning(
+                self.logger.warning(
                     f"No channel set for changelog alerts in guild {guild_id}"
                 )
                 continue
 
             channel = self.bot.get_channel(int(channel_id))
             if not channel:
-                logging.warning(
+                self.logger.warning(
                     f"Could not find channel {channel_id} in guild {guild_id}"
                 )
                 continue
@@ -96,15 +98,15 @@ class Changelog(commands.Cog, name="ChangeLogCog"):
             try:
                 await channel.send(cur_logstr_formatted)
             except discord.errors.Forbidden as e:
-                logging.warning(
+                self.logger.warning(
                     f"When posting changelog got forbidden/lost ch. {e}. Removing from db."
                 )
                 set_feature_state(guild_id, "changelog_alert", False)
 
         # Update the db after posting
-        store_key("LAST_CHANGELOG", cur_lognum)
+        store_key_number("LAST_CHANGELOG", cur_lognum)
 
-        logging.info("Changelog done!")
+        self.logger.info("Changelog done!")
 
     @app_commands.command(name="set_changelog_alert_channel")
     @app_commands.checks.has_permissions(administrator=True)

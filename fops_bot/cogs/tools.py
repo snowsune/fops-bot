@@ -2,25 +2,31 @@ import discord
 import logging
 import random
 import asyncio
+import subprocess
 from discord import app_commands
 from discord.ext import commands, tasks
 from datetime import datetime
 from typing import Optional, cast
 
 from utilities.common import seconds_until
-from utilities.db_ops import (
+from utilities.database import (
     store_key,
     retrieve_key,
     is_feature_enabled,
     set_feature_state,
     get_feature_data,
     get_guilds_with_feature_enabled,
+    store_key_number,
+    retrieve_key_number,
+    get_db_info,
 )
+from fops_bot.cogs.changelog import get_current_changelog
 
 
 class ToolCog(commands.Cog, name="ToolsCog"):
     def __init__(self, bot):
         self.bot = bot
+        self.logger = logging.getLogger(__name__)
         self.command_counter = 0  # Initialize a command counter
         self.start_time = datetime.now()  # Track when the bot started
 
@@ -59,21 +65,16 @@ class ToolCog(commands.Cog, name="ToolsCog"):
 
         self.command_counter += 1
 
-    @tasks.loop(count=1)
+    @tasks.loop(seconds=1)
     async def reset_counter_task(self):
         """
         Task to reset the command counter at midnight, using the seconds_until function.
         """
-        # Wait until midnight (00:00)
-        seconds_to_midnight = seconds_until(0, 0)
-        await asyncio.sleep(seconds_to_midnight)
-
-        # Reset the command counter
-        self.command_counter = 0
-        logging.info("Command counter reset at midnight.")
-
-        # Restart the loop to wait for the next midnight
-        self.reset_counter_task.restart()
+        while True:
+            seconds_to_midnight = seconds_until(0, 0)
+            await asyncio.sleep(seconds_to_midnight)
+            self.command_counter = 0
+            self.logger.info("Command counter reset at midnight.")
 
     @app_commands.command(name="invite_bot")
     async def invite_bot(self, ctx: discord.Interaction):
@@ -85,30 +86,84 @@ class ToolCog(commands.Cog, name="ToolsCog"):
     @app_commands.command(name="version")
     async def version(self, ctx: discord.Interaction):
         """
-        Prints the revision/version.
+        Prints the revision/version, yt-dlp version, Postgres version, GitHub hash link, and last changelog title.
         """
         dbstatus = "Unknown"
         vc = None
+        yt_dlp_version = "Unknown"
+        pg_version = "Unknown"
+        changelog_title = "Unknown"
+        github_link = "Unknown"
 
+        # yt-dlp version
+        try:
+            yt_dlp_version = (
+                subprocess.check_output(["yt-dlp", "--version"]).decode().strip()
+            )
+        except Exception as e:
+            yt_dlp_version = f"Error: {e}"
+
+        # Postgres version
+        try:
+            pg_version = get_db_info()
+        except Exception as e:
+            pg_version = f"Error: {e}"
+
+        # GitHub hash link (extract short hash from version string)
+        short_hash = None
+        if self.bot.version and self.bot.version != "None":
+            # Try to extract the git hash (after last '-g' or last 8 chars if present)
+            if "-g" in self.bot.version:
+                short_hash = self.bot.version.split("-g")[-1].split("-")[0]
+            else:
+                short_hash = self.bot.version[-8:]
+            github_link = f"https://github.com/Snowsune/fops-bot/commit/{short_hash}"
+        else:
+            github_link = "Not available"
+
+        # Last changelog title/content
+        try:
+            changelog_path = "/app/README.md"
+            changelog_num, changelog_content = get_current_changelog(changelog_path)
+            if changelog_num is not None and changelog_content:
+                changelog_title = (
+                    f"Changelog {changelog_num}: {changelog_content.splitlines()[0]}"
+                )
+            elif changelog_num is not None:
+                changelog_title = f"Changelog {changelog_num}: (no content)"
+            else:
+                changelog_title = "Not found"
+        except Exception as e:
+            changelog_title = f"Error: {e}"
+
+        # DB status and version count (sanitize vc)
         try:
             if True:
                 try:
-                    vc = retrieve_key("version_count", "0")
-                    logging.info(f"Retrieved vc as {vc}")
+                    vc = retrieve_key_number("version_count", 0)
+                    if not isinstance(vc, int) or vc is None:
+                        vc = 0
+                    self.logger.info(f"Retrieved vc as {vc}")
                     dbstatus = "Ready"
                 except Exception as e:
-                    logging.error(f"Error retrieving key, error was {e}")
+                    self.logger.error(f"Error retrieving key, error was {e}")
                     dbstatus = "Not Ready (connected but cant retrieve now)"
 
-                store_key("version_count", str(int(vc or "0") + 1))
+                store_key_number("version_count", (vc or 0) + 1)
             else:
                 dbstatus = "Not Ready"
         except Exception as e:
-            logging.error(f"Couldn't check db at all, error was {e}")
+            self.logger.error(f"Couldn't check db at all, error was {e}")
 
-        await ctx.response.send_message(
-            f"I am running version `{self.bot.version}`. DB is `{dbstatus}`, access `{vc}`"
+        msg = (
+            f"**Version:** `{self.bot.version}`\n"
+            f"**GitHub:** {github_link}\n"
+            f"**yt-dlp version:** `{yt_dlp_version}`\n"
+            f"**Postgres version:** `{pg_version}`\n"
+            f"**DB status:** `{dbstatus}` (access `{vc}`)\n"
+            f"**Last changelog:** {changelog_title}"
         )
+        await ctx.response.send_message(msg)
 
     @app_commands.command(name="enable_nsfw")
     @app_commands.checks.has_permissions(administrator=True)

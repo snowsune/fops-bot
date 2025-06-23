@@ -7,6 +7,7 @@ import sys
 import asyncio
 import logging
 import random
+import colorlog
 
 import discordhealthcheck
 
@@ -14,18 +15,31 @@ import discord
 from discord import Intents, app_commands
 from discord.ext import commands
 
-from .utilities.migrations import init_migrations
+# Remove all handlers associated with the root logger object.
+for handler in logging.root.handlers[:]:
+    logging.root.removeHandler(handler)
 
+# Set up colorlog for colored logs
+handler = colorlog.StreamHandler()
+handler.setFormatter(
+    colorlog.ColoredFormatter(
+        "%(log_color)s%(levelname)s:%(name)s: %(message)s",
+        log_colors={
+            "DEBUG": "cyan",
+            "INFO": "green",
+            "WARNING": "yellow",
+            "ERROR": "red",
+            "CRITICAL": "bold_red",
+        },
+    )
+)
+logging.basicConfig(level=logging.INFO, handlers=[handler])
 
-def init_db():
-    try:
-        # Initialize and run migrations
-        init_migrations()
-        logging.info("Database initialized and migrations applied successfully.")
-        return True
-    except Exception as e:
-        logging.exception(f"Database initialization failed: {e}")
-        return False
+# Mute discord.py logs except warnings/errors
+discord_logger = logging.getLogger("discord")
+discord_logger.setLevel(logging.WARNING)
+for h in discord_logger.handlers[:]:
+    discord_logger.removeHandler(h)
 
 
 class FopsBot:
@@ -49,7 +63,12 @@ class FopsBot:
         # Get the build commit that the code was built with.
         self.version = str(os.environ.get("GIT_COMMIT"))  # Currently running version
         # Find out if we're running in debug mode, or not.
-        self.debug = str(os.environ.get("DEBUG")).lower() in ("true", "1", "t")
+        self.debug = str(os.environ.get("DEBUG", "0")).lower() in (
+            "true",
+            "1",
+            "t",
+            "yes",
+        )
 
         # Append our workdir to the path (for importing modules)
         self.workdir = "/app/fops_bot/"
@@ -64,11 +83,6 @@ class FopsBot:
             )
             logging.debug("Running in debug mode.")
         else:
-            logging.basicConfig(
-                stream=sys.stderr,
-                level=logging.INFO,
-                format="%(levelname)s:%(name)s: %(message)s",  # Include logger name in output
-            )
             logging.info("Running in prod mode.")
 
         # Append some extra information to our discord bot
@@ -77,7 +91,7 @@ class FopsBot:
         # DB Setup
         try:
             logging.info("Configuring DB and running migrations")
-            self.dbReady = init_db()
+            self.dbReady = True
         except Exception as e:
             logging.error(f"Could not configure the DB! Error was {e}")
             self.dbReady = False

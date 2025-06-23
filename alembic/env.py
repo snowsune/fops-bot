@@ -33,6 +33,9 @@ target_metadata = Base.metadata
 
 
 def get_url():
+    url = os.getenv("DATABASE_URL")
+    if url:
+        return url
     return f"postgresql://{os.getenv('DB_USER')}:{os.getenv('DB_PASS')}@{os.getenv('DB_HOST')}:{os.getenv('DB_PORT')}/{os.getenv('DB_NAME')}"
 
 

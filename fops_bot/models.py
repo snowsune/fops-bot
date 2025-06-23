@@ -57,9 +57,10 @@ class MigrationLog(Base):
 
 # Database connection setup
 def get_engine():
-    return create_engine(
-        f"postgresql://{os.getenv('DB_USER')}:{os.getenv('DB_PASS')}@{os.getenv('DB_HOST')}:{os.getenv('DB_PORT')}/{os.getenv('DB_NAME')}"
-    )
+    db_url = os.getenv("DATABASE_URL")
+    if not db_url:
+        raise RuntimeError("DATABASE_URL environment variable is not set!")
+    return create_engine(db_url)
 
 
 def get_session():

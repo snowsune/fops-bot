@@ -1,7 +1,11 @@
 import discord
 import logging
 
-from .features import get_feature_data, set_feature_state, is_feature_enabled
+from fops_bot.utilities.database import (
+    get_feature_data,
+    set_feature_state,
+    is_feature_enabled,
+)
 
 
 async def set_feature_state_helper(

@@ -12,3 +12,7 @@
 
 # Testing
 !tests/
+
+# DB
+!alembic.ini
+!alembic/

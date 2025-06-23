@@ -17,14 +17,14 @@ from discord import app_commands
 from discord.ext import commands, tasks
 from datetime import datetime, timedelta, timezone
 
-from utilities.common import seconds_until
-from utilities.db_ops import store_number, retrieve_number
+from utilities.database import store_number, retrieve_number
 
 
 class FanclubCog(commands.Cog, name="FanclubCog"):
     def __init__(self, bot):
         self.bot = bot
         self.localtz = pytz.timezone("US/Eastern")
+        self.logger = logging.getLogger(__name__)
 
     def getStat(self, guild: int, addOne=False):
         """
