@@ -116,9 +116,15 @@ jobs:
           tags: ${{ env.CUSTOM_TAG }}
           labels: ${{ steps.meta.outputs.labels }}
 
+      - name: Get Docker image size
+        id: image_size
+        run: |
+          SIZE=$(docker images ${{ env.CUSTOM_TAG }} --format "{{.Size}}")
+          echo "IMAGE_SIZE=$SIZE" >> $GITHUB_ENV
+
       - name: Discord notification
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         uses: Ilshidur/action-discord@master
         with:
-          args: "Built and published a new Fops Bot docker image to `${{ env.CUSTOM_TAG }}`!"
+          args: "Built and published a new Fops Bot docker image to `${{ env.CUSTOM_TAG }}`! Image size: `${{ env.IMAGE_SIZE }}`"
