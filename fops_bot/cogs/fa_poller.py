@@ -3,6 +3,7 @@ import faapi
 import discord
 import logging
 import time
+import asyncio
 
 from discord.ext import commands, tasks
 from fops_bot.models import get_session, Subscription, KeyValueStore
@@ -17,16 +18,41 @@ class FA_PollerCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.logger = logging.getLogger(__name__)
+        self._fa_poll_task = None
 
-        self.fa_poll_task.start()
+    async def cog_load(self):
+        self._fa_poll_task = asyncio.create_task(self.fa_poll_loop())
 
     def cog_unload(self):
-        self.fa_poll_task.cancel()
+        if self._fa_poll_task:
+            self._fa_poll_task.cancel()
 
-    @tasks.loop(minutes=5)
-    async def fa_poll_task(self):
+    async def fa_poll_loop(self):
+        while True:
+            interval_minutes = 5  # fallback default
+            try:
+                with get_session() as session:
+                    fa_subs = (
+                        session.query(Subscription)
+                        .filter_by(service_type="FurAffinity")
+                        .order_by(Subscription.id)
+                        .all()
+                    )
+                    num_subs = len(fa_subs)
+                    if num_subs > 0:
+                        interval_minutes = max(1, 60 // num_subs)
+                    else:
+                        interval_minutes = 5
+            except Exception as e:
+                self.logger.error(f"Error calculating FA poll interval: {e}")
+                interval_minutes = 5
+
+            await self.fa_poll_task_once()
+            self.logger.debug(f"Waiting {interval_minutes} to run FA Poller again")
+            await asyncio.sleep(interval_minutes * 60)
+
+    async def fa_poll_task_once(self):
         self.logger.debug("Running FA poller")
-
         with get_session() as session:
             fa_subs = (
                 session.query(Subscription)
