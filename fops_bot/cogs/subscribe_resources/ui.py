@@ -12,12 +12,22 @@ class ChannelSelectDropdown(discord.ui.Select):
         from discord import Member
 
         show_channels = False
+        channels = []
         if self.guild and isinstance(interaction.user, Member):
             perms = interaction.user.guild_permissions  # type: ignore
             if perms and (perms.manage_guild or perms.manage_channels):
                 show_channels = True
-        if show_channels:
-            for channel in self.guild.text_channels:  # type: ignore
+
+        if show_channels and isinstance(interaction.channel, discord.TextChannel):
+            category = interaction.channel.category
+
+            # What we're doing here is grabbing just this category of channels!
+            if category:
+                channels = [ch for ch in category.text_channels]
+            else:
+                channels = [interaction.channel]
+            channels = channels[:24]  # Discord limit on options
+            for channel in channels:
                 options.append(
                     discord.SelectOption(
                         label=f"#{channel.name}", value=str(channel.id)
