@@ -168,3 +168,16 @@ Fixed some misc bugs <3
 
 Added a new `Vixi Thinks` context command!
 Check it out!
+
+
+## Changelog 18
+
+Some major changes here! And potentially some new bugs haha
+total DB backend change! And for the better! much more can be done
+now in-server config without me editing things!
+
+New flashy command~ `/manage_following` (maybe i'll change the name later)
+but it allows you to follow (at least for now) FA, and eventually e6 and 
+booru posts with filters!
+
+TY!
