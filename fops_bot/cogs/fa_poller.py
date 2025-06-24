@@ -57,7 +57,13 @@ class FA_PollerCog(commands.Cog):
 
             latest_posts = gallery[:5]
             ids = [str(post.id) for post in latest_posts]
-            if sub.last_reported_id in ids:
+            if sub.last_reported_id is None:
+                # New subscription: only post the latest submission
+                new_ids = ids[:1]
+                self.logger.warning(
+                    f"Subscription is new, fast-forwarding id to {new_ids}."
+                )
+            elif sub.last_reported_id in ids:
                 new_ids = ids[: ids.index(sub.last_reported_id)]
             else:
                 new_ids = ids
