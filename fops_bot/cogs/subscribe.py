@@ -4,7 +4,7 @@ import discord
 import logging
 from discord.ext import commands
 from discord import app_commands
-from typing import Optional
+from typing import Optional, List
 from requests.cookies import RequestsCookieJar
 from datetime import datetime, timezone
 from fops_bot.models import get_session, Subscription
@@ -12,6 +12,40 @@ from fops_bot.models import get_session, Subscription
 # Load FurAffinity cookies from environment variables
 FA_COOKIE_A = os.getenv("FA_COOKIE_A")
 FA_COOKIE_B = os.getenv("FA_COOKIE_B")
+
+
+def get_all_in_guild(guild_id: int) -> List[Subscription]:
+    """Return all Subscription entries for a given guild."""
+    with get_session() as session:
+        return list(session.query(Subscription).filter_by(guild_id=guild_id).all())
+
+
+class ManageFollowingView(discord.ui.View):
+    def __init__(self, subscriptions: List[Subscription]):
+        super().__init__(timeout=180)
+        self.subscriptions = subscriptions
+
+    @discord.ui.button(
+        label="Add", style=discord.ButtonStyle.green, custom_id="add_following"
+    )
+    async def add_callback(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
+        # TODO: Show dropdown for service type, then modal for search/filters
+        await interaction.response.send_message(
+            "Add subscription (UI coming soon)", ephemeral=True
+        )
+
+    @discord.ui.button(
+        label="Remove", style=discord.ButtonStyle.red, custom_id="remove_following"
+    )
+    async def remove_callback(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
+        # TODO: Show dropdown or modal to select and remove a subscription
+        await interaction.response.send_message(
+            "Remove subscription (UI coming soon)", ephemeral=True
+        )
 
 
 class SubscribeCog(commands.Cog):
@@ -25,102 +59,26 @@ class SubscribeCog(commands.Cog):
             self.logger.warning("FA cookies look short/invalid.")
 
     @app_commands.command(
-        name="subscribe_fa", description="Subscribe to a FurAffinity userpage!"
+        name="manage_following",
+        description="Manage your followed FA/E6 feeds in this guild.",
     )
-    async def subscribe_fa(
-        self,
-        interaction: discord.Interaction,
-        username: str,
-        channel: Optional[discord.TextChannel] = None,
-    ):
-        # Normalize username (trim and lowercase for matching)
-        normalized_username = username.strip().lower()
-        target_channel_id = channel.id if channel else interaction.channel.id
-        target_guild_id = interaction.guild.id
-
-        # 1. Enforce 10,000 active user limit and prevent duplicate subscriptions
-        with get_session() as session:
-            fa_count = (
-                session.query(Subscription)
-                .filter_by(service_type="FurAffinity")
-                .count()
+    async def manage_following(self, interaction: discord.Interaction):
+        guild_id = interaction.guild.id
+        subscriptions = get_all_in_guild(guild_id)
+        if subscriptions:
+            desc = "\n".join(
+                [
+                    f"- `{sub.service_type}`: `{sub.search_criteria}` in <#{sub.channel_id}>"
+                    for sub in subscriptions
+                ]
             )
-            # Check for duplicate subscription
-            duplicate = (
-                session.query(Subscription)
-                .filter(
-                    Subscription.service_type == "FurAffinity",
-                    Subscription.guild_id == target_guild_id,
-                    Subscription.channel_id == target_channel_id,
-                    Subscription.search_criteria.ilike(normalized_username),
-                )
-                .first()
-            )
-            if duplicate:
-                await interaction.response.send_message(
-                    f"Already subscribed to `{username}` in this channel.",
-                    ephemeral=True,
-                )
-                return
-            if fa_count >= 10000:
-                await interaction.response.send_message(
-                    f"FA bot activity limited for politeness ({fa_count} > 10,000), try again another time!",
-                    ephemeral=True,
-                )
-                return
-
-        # 2. Prepare cookies for faapi
-        cookies = RequestsCookieJar()
-        cookies.set("a", self.fa_cookie_a or "")
-        cookies.set("b", self.fa_cookie_b or "")
-        api = faapi.FAAPI(cookies)
-
-        # 3. Validate username and get latest post
-        try:
-            gallery, _ = api.gallery(username, 1)
-            if not gallery:
-                raise ValueError("No submissions found or user does not exist.")
-            latest_submission = gallery[0]
-            latest_post_id = latest_submission.id
-        except Exception as e:
-            await interaction.response.send_message(f"FA error: {e}", ephemeral=True)
-            return
-
-        # 4. Store subscription in DB
-        with get_session() as session:
-            sub = Subscription(
-                service_type="FurAffinity",
-                user_id=interaction.user.id,
-                subscribed_at=datetime.now(timezone.utc),
-                guild_id=target_guild_id,
-                channel_id=target_channel_id,
-                search_criteria=normalized_username,
-                last_reported_id=latest_post_id,
-            )
-            session.add(sub)
-            session.commit()
-
-        await interaction.response.send_message(
-            f"Attached FA user feed for `{username}` to <#{target_channel_id}>",
-            ephemeral=True,
+        else:
+            desc = "No subscriptions configured in this guild."
+        embed = discord.Embed(
+            title="Manage Following", description=desc, color=discord.Color.blue()
         )
-
-    @app_commands.command(
-        name="subscribe_booru", description="Subscribe to a booru search."
-    )
-    async def subscribe_booru(
-        self,
-        interaction: discord.Interaction,
-        search: str,
-        channel: Optional[discord.TextChannel] = None,
-        service: str = "e6",
-    ):
-        # TODO: Implement booru/e6 subscription logic
-        await interaction.response.send_message(
-            f"Subscribed to {service} search: {search}", ephemeral=True
-        )
-
-    # Optionally, add unsubscribe and list commands here
+        view = ManageFollowingView(subscriptions)
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
 
 async def setup(bot):
