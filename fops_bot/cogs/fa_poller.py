@@ -2,6 +2,7 @@ import os
 import faapi
 import discord
 import logging
+import time
 
 from discord.ext import commands, tasks
 from fops_bot.models import get_session, Subscription, KeyValueStore
@@ -154,6 +155,15 @@ class FA_PollerCog(commands.Cog):
             if new_ids:
                 sub.last_reported_id = new_ids[0]
                 session.commit()
+
+            # Save the epoch of the last FA poll
+            now_epoch = int(time.time())
+            kv_last_poll = session.get(KeyValueStore, "fa_last_poll")
+            if kv_last_poll:
+                kv_last_poll.value = str(now_epoch)
+            else:
+                session.add(KeyValueStore(key="fa_last_poll", value=str(now_epoch)))
+            session.commit()
 
             # Update poller index
             next_index = (last_index + 1) % len(fa_subs)
