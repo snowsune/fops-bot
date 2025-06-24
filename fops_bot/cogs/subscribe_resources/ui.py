@@ -228,7 +228,7 @@ class ManageFollowingView(discord.ui.View):
             )
             session.add(sub)
             session.commit()
-        where = "your DMs" if is_pm else f"<# {channel_id}>"
+        where = "your DMs" if is_pm else f"<#{channel_id}>"
         await interaction.response.send_message(
             f"Added subscription for `{service_type}`: `{search_criteria}` in {where}.",
             ephemeral=True,
