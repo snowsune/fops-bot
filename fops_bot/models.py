@@ -64,10 +64,12 @@ class Subscription(Base):
     subscribed_at = Column(
         DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
     )
-    guild_id = Column(BigInteger, nullable=False)  # Discord guild ID
+    guild_id = Column(BigInteger, nullable=True)  # Discord guild ID (nullable for PM)
     channel_id = Column(BigInteger, nullable=False)  # Discord channel ID
     search_criteria = Column(String, nullable=False)  # Username or search string
     last_reported_id = Column(String, nullable=True)  # Last reported post/submission ID
+    filters = Column(String, nullable=True)  # Tag filters or exclusion criteria
+    is_pm = Column(Boolean, nullable=False, default=False)  # Whether to deliver via PM
 
 
 # Database connection setup
