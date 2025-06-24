@@ -24,7 +24,7 @@ class FA_PollerCog(commands.Cog):
 
     @tasks.loop(minutes=5)
     async def fa_poll_task(self):
-        self.logger.info("Running FA poller")
+        self.logger.debug("Running FA poller")
 
         with get_session() as session:
             fa_subs = (
@@ -52,6 +52,7 @@ class FA_PollerCog(commands.Cog):
                 self.logger.warning(f"FA API error for {sub.search_criteria}: {e}")
                 return
             if not gallery:
+                self.logger.warning(f"No gallery for {sub.search_criteria}.")
                 return
 
             latest_posts = gallery[:5]
@@ -76,24 +77,41 @@ class FA_PollerCog(commands.Cog):
 
             # Post new submissions in order (oldest first)
             for idx, post_id in enumerate(reversed(new_ids)):
-                post = next((p for p in latest_posts if str(p.id) == post_id), None)
-                if not post:
+                # ---
+                # 1. Fetch the full Submission object (needed for tags)
+                # ---
+                try:
+                    submission, _ = api.submission(int(post_id))
+                except Exception as e:
+                    self.logger.warning(
+                        f"Failed to fetch full submission for {post_id}: {e}"
+                    )
                     continue
-                tags = set(getattr(post, "keywords", []) or [])
+
+                # ---
+                # 2. Extract tags and normalize
+                # ---
+                tags = set(submission.tags or [])
                 tags = {t.lower() for t in tags}
-                # Filtering logic
+                self.logger.debug(f"Post {post_id} tags: {tags}")
+
+                # ---
+                # 3. Apply positive/negative filter logic
+                # ---
                 if positive_filters and not (tags & positive_filters):
-                    # If there are positive filters, skip if none match
                     self.logger.info(
-                        f"Skipping {post_id} due to missing required tags: {positive_filters}"
+                        f"Skipping {post_id} due to missing required tags: {positive_filters} (tags: {tags})"
                     )
                     continue
                 if any(tag in tags for tag in negative_filters):
                     self.logger.info(
-                        f"Skipping {post_id} due to excluded tags: {negative_filters}"
+                        f"Skipping {post_id} due to excluded tags: {negative_filters} (tags: {tags})"
                     )
                     continue
-                # Determine which link to use
+
+                # ---
+                # 4. Determine which link to use (NSFW logic)
+                # ---
                 url = f"https://www.furaffinity.net/view/{post_id}/"
                 use_xfa = False
                 channel = None
@@ -107,6 +125,10 @@ class FA_PollerCog(commands.Cog):
                     url = f"https://www.xfuraffinity.net/view/{post_id}/"
                 subtitle = "\n-# Run /manage_following to edit this feed."
                 msg = f"{url}{subtitle}"
+
+                # ---
+                # 5. Post the message to the correct destination
+                # ---
                 try:
                     if sub.is_pm:
                         self.logger.info(
