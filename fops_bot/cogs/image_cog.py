@@ -17,9 +17,10 @@ from typing import Optional, Callable
 import utilities.image_tasks
 
 
-class ImageCog(commands.Cog):
+class ImageCog(commands.Cog, name="ImageCog"):
     def __init__(self, bot):
         self.bot = bot
+        self.logger = logging.getLogger(__name__)
         self.register_image_tasks()
 
     def register_image_tasks(self):
@@ -36,7 +37,7 @@ class ImageCog(commands.Cog):
             )
             # Attach the task name to the context menu
             context_menu.task_name = task_name
-            logging.info(f"Added image task {task_name} to context menu.")
+            self.logger.info(f"Added image task {task_name} to context menu.")
 
             # Add the command to the bot
             self.bot.tree.add_command(context_menu)
@@ -107,7 +108,7 @@ class ImageCog(commands.Cog):
                 file=discord.File(io.BytesIO(output_bytes), f"{task_name}.png")
             )
         except Exception as e:
-            logging.error(f"Error processing task '{task_name}': {e}")
+            self.logger.error(f"Error processing task '{task_name}': {e}")
             await interaction.followup.send(
                 "Failed to process the task.", ephemeral=True
             )

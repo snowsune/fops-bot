@@ -17,27 +17,25 @@ from discord import app_commands
 from discord.ext import commands, tasks
 from datetime import datetime, timedelta, timezone
 
-from utilities.common import seconds_until
-from utilities.database import retrieve_key, store_key
+from utilities.database import store_number, retrieve_number
 
 
 class FanclubCog(commands.Cog, name="FanclubCog"):
     def __init__(self, bot):
         self.bot = bot
         self.localtz = pytz.timezone("US/Eastern")
+        self.logger = logging.getLogger(__name__)
 
     def getStat(self, guild: int, addOne=False):
         """
         Tell me how many times a guild has been booped
         """
-
         bc_key = f"boopCount_{guild}"
-
-        bc = int(retrieve_key(bc_key, 0))
+        bc = retrieve_number(bc_key)
 
         if addOne:
-            store_key(bc_key, bc + 1)
-            bc = retrieve_key(bc_key)
+            store_number(bc_key, bc + 1)
+            bc = retrieve_number(bc_key)
 
         return bc
 
@@ -50,6 +48,10 @@ class FanclubCog(commands.Cog, name="FanclubCog"):
         if (any(item in message.content.lower() for item in boops)) and (
             not message.author.bot
         ):
+            if message.guild is None:
+                logging.debug("Message was from DM, ignoring boop")
+                return
+
             logging.debug(f"Boop detected in {message}, guild was {message.guild}")
             await message.reply(f"{self.getStat(message.guild.id, True)} boops!")
 

@@ -11,6 +11,10 @@ from datetime import datetime, timedelta, timezone
 from discord.ext import commands, tasks
 from utilities.database import store_key, retrieve_key
 from utilities.common import seconds_until
+from utilities.database import (
+    retrieve_key_number,
+    store_key_number,
+)
 
 # Constants
 ROLE = "1371890734377996319"  # Fox Toy
@@ -24,21 +28,22 @@ class FoxtoyCog(commands.Cog, name="FoxtoyCog"):
     def __init__(self, bot):
         self.bot = bot
         self.localtz = pytz.timezone("US/Eastern")
+        self.logger = logging.getLogger(__name__)
 
     async def cog_unload(self):
         self.role_rotation.cancel()
 
     @tasks.loop(minutes=10)  # Check every 10 minutes
     async def role_rotation(self):
-        logging.info("Foxtoy role rotation task running")
+        self.logger.info("Foxtoy role rotation task running")
 
         # Check if we need to rotate immediately
-        last_change = int(retrieve_key("last_fox_toy_change", "0"))
+        last_change = retrieve_key_number("last_fox_toy_change", 0)
         current_time = int(time.time())
         time_since_change = current_time - last_change
 
         if time_since_change > 7 * 24 * 60 * 60:  # More than 7 days ago
-            logging.warning("Role is out of date, rotating immediately")
+            self.logger.warning("Role is out of date, rotating immediately")
         else:
             # Calculate time until next Sunday
             now = datetime.now(self.localtz)
@@ -52,25 +57,25 @@ class FoxtoyCog(commands.Cog, name="FoxtoyCog"):
                 hour=0, minute=0, second=0, microsecond=0
             ) + timedelta(days=days_until_sunday)
             wait_seconds = (next_sunday - now).total_seconds()
-            logging.info(f"Waiting {wait_seconds} seconds until next Sunday")
+            self.logger.info(f"Waiting {wait_seconds} seconds until next Sunday")
             await asyncio.sleep(wait_seconds)
 
         # Get the guild
         guild = self.bot.get_guild(int(GUILD))
         if not guild:
-            logging.error("Could not find guild")
+            self.logger.error("Could not find guild")
             return
 
         # Get the role
         role = guild.get_role(int(ROLE))
         if not role:
-            logging.error("Could not find role")
+            self.logger.error("Could not find role")
             return
 
         # Get the channel
         channel = guild.get_channel(int(CHAN))
         if not channel:
-            logging.error("Could not find channel")
+            self.logger.error("Could not find channel")
             return
 
         # Get all members who don't have admin or fox role
@@ -88,7 +93,7 @@ class FoxtoyCog(commands.Cog, name="FoxtoyCog"):
             eligible_members.append(member)
 
         if not eligible_members:
-            logging.error("No eligible members found")
+            self.logger.error("No eligible members found")
             return
 
         # Remove role from current holder
@@ -105,7 +110,7 @@ class FoxtoyCog(commands.Cog, name="FoxtoyCog"):
 
         # Store the change
         store_key("last_fox_toy", str(new_holder.id))
-        store_key("last_fox_toy_change", str(int(time.time())))
+        store_key_number("last_fox_toy_change", int(time.time()))
 
         # Announce the change
         await channel.send(
@@ -115,7 +120,7 @@ class FoxtoyCog(commands.Cog, name="FoxtoyCog"):
     @commands.Cog.listener()
     async def on_ready(self):
         self.role_rotation.start()
-        logging.info("Foxtoy role rotation task started")
+        self.logger.info("Foxtoy role rotation task started")
 
 
 async def setup(bot):

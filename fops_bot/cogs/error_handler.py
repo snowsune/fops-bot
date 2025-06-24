@@ -5,7 +5,7 @@ import traceback
 from discord import app_commands
 from discord.ext import commands
 
-from utilities.features import (
+from utilities.database import (
     get_feature_data,
     set_feature_state,
     get_guilds_with_feature_enabled,

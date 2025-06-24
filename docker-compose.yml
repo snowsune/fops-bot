@@ -1,84 +1,13 @@
 services:
-  db:
-    image: postgres:10.5
-    restart: "no"
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=fops_bot_db
-    healthcheck:
-      test: ["CMD", "pg_isready", "-q", "-d", "fops_bot_db", "-U", "postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    logging:
-      options:
-        max-size: 10m
-        max-file: "3"
-    ports:
-      - "5438:5432"
-    volumes:
-      - .local/data:/var/lib/postgresql/data
-
-  migrations:
-    image: fops_bot:$TAG
-    depends_on:
-      db:
-        condition: service_healthy
-    build:
-      context: .
-      dockerfile: Dockerfile
-    environment:
-      DB_USER: postgres
-      DB_PASS: postgres
-      DB_NAME: fops_bot_db
-      DB_HOST: db
-      DB_PORT: 5432
-    command: alembic upgrade head
-
-  pgadmin:
-    image: dpage/pgadmin4
-    container_name: pgadmin4_container
-    restart: no
-    ports:
-      - "8888:80"
-    environment:
-      PGADMIN_DEFAULT_EMAIL: kenwood364@gmail.com
-      PGADMIN_DEFAULT_PASSWORD: iamnotacrook
-    volumes:
-      - .local/pgadmin:/var/lib/pgadmin
-
   fops_bot:
     image: fops_bot:${TAG}
-    depends_on:
-      db:
-        condition: service_healthy
     build:
       context: .
       dockerfile: Dockerfile
+    env_file:
+      - .env
     environment:
-      TZ: ${TZ}
-      BOT_TOKEN: ${BOT_TOKEN}
-      NCTOKEN: ${NCTOKEN}
-      PFSENSE_URL: ${PFSENSE_URL}
-      PFSENSE_USER: ${PFSENSE_USER}
-      PFSENSE_PASSWORD: ${PFSENSE_PASSWORD}
-      ALERT_CHAN_ID: ${ALERT_CHAN_ID}
-      SERVICE_CHAN_ID: ${SERVICE_CHAN_ID}
-      HOLES: ${HOLES}
-      BOORU_KEY: ${BOORU_KEY}
-      BOORU_USER: ${BOORU_USER}
-      BOORU_URL: ${BOORU_URL}
-      BOORU_AUTO_UPLOAD: ${BOORU_AUTO_UPLOAD}
-      BOORU_MAINTENANCE: ${BOORU_MAINTENANCE}
-      SAUCENAO_API_KEY: ${SAUCENAO_API_KEY}
-      OWNER_UID: ${OWNER_UID}
-      DB_USER: ${DB_USER}
-      DB_PASS: ${DB_PASS}
-      DB_NAME: ${DB_NAME}
-      DB_HOST: ${DB_HOST}
-      DB_PORT: ${DB_PORT}
-      # DEBUG: ${DEBUG}
+      DEBUG: true
     volumes:
       - .local/config:/app/config
     restart: "no"

@@ -3,6 +3,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 import asyncio
+import logging
 
 OWNER_UID = int(os.getenv("OWNER_UID"))
 
@@ -10,6 +11,7 @@ OWNER_UID = int(os.getenv("OWNER_UID"))
 class VixiThinks(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.logger = logging.getLogger(__name__)
         self.thinking_messages = {}  # message_id -> (channel_id, original_message_id)
 
         # Register the context menu command
