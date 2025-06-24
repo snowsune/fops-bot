@@ -101,9 +101,14 @@ class FopsBot:
     async def load_cogs(self):
         # Cog Loader!
         logging.info("Loading cogs...")
-        for filename in os.listdir(self.workdir + "cogs"):
-            logging.info(f"Found file {filename}, loading as extension.")
+        cogs_dir = self.workdir + "cogs"
+        for filename in os.listdir(cogs_dir):
+            full_path = os.path.join(cogs_dir, filename)
+
+            if os.path.isdir(full_path):
+                continue
             if filename.endswith(".py") and not filename.startswith("_"):
+                logging.info(f"Found file {filename}, loading as extension.")
                 try:
                     await self.bot.load_extension(f"cogs.{filename[:-3]}")
                 except Exception as e:
