@@ -71,8 +71,8 @@ class Subscription(Base):
     filters = Column(String, nullable=True)  # Tag filters or exclusion criteria
     is_pm = Column(Boolean, nullable=False, default=False)  # Whether to deliver via PM
     last_ran = Column(
-        DateTime, nullable=True, default=None
-    )  # Last time this subscription was checked
+        BigInteger, nullable=True, default=None
+    )  # Last time this subscription was checked (epoch seconds)
 
 
 # Database connection setup
