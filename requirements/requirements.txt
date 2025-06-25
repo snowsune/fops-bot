@@ -11,3 +11,4 @@ opencv-python
 sqlalchemy
 alembic
 colorlog
+faapi

@@ -55,9 +55,8 @@ class Changelog(commands.Cog, name="ChangeLogCog"):
         cur_lognum = int(_d[0])
         cur_logstr = _d[1]
 
-        self.logger.info(
-            f"Changelog is currently {cur_lognum}/{self.last_log}. Content was: {cur_logstr}"
-        )
+        self.logger.info(f"Changelog is currently {cur_lognum}/{self.last_log}.")
+        self.logger.debug(f"Changelog content was: {cur_logstr}")
 
         if cur_lognum == self.last_log:
             # If they match, we're done and we can pack up
