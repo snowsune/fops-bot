@@ -33,7 +33,11 @@ handler.setFormatter(
         },
     )
 )
-logging.basicConfig(level=logging.INFO, handlers=[handler])
+
+# Set log level based on DEBUG env variable
+debug_env = str(os.environ.get("DEBUG", "0")).lower() in ("true", "1", "t", "yes")
+log_level = logging.DEBUG if debug_env else logging.INFO
+logging.basicConfig(level=log_level, handlers=[handler])
 
 # Mute discord.py logs except warnings/errors
 discord_logger = logging.getLogger("discord")
@@ -51,42 +55,16 @@ class FopsBot:
         # Some local memory flags
         self.dbReady = False
 
+        # Get the build commit that the code was built with.
+        self.version = str(os.environ.get("GIT_COMMIT"))  # Currently running version
+
         # Create our discord bot
         self.bot = commands.Bot(command_prefix="^", intents=intents)
+        # Set version attribute on bot for cogs
+        self.bot.version = self.version
 
         # Remove legacy help command
         self.bot.remove_command("help")
-
-        # Register python commands
-        self.bot.on_ready = self.on_ready
-
-        # Get the build commit that the code was built with.
-        self.version = str(os.environ.get("GIT_COMMIT"))  # Currently running version
-        # Find out if we're running in debug mode, or not.
-        self.debug = str(os.environ.get("DEBUG", "0")).lower() in (
-            "true",
-            "1",
-            "t",
-            "yes",
-        )
-
-        # Append our workdir to the path (for importing modules)
-        self.workdir = "/app/fops_bot/"
-        sys.path.append(self.workdir)
-
-        # Setup logging.
-        if self.debug:
-            logging.basicConfig(
-                stream=sys.stderr,
-                level=logging.DEBUG,
-                format="%(levelname)s:%(name)s: %(message)s",  # Include logger name in output
-            )
-            logging.debug("Running in debug mode.")
-        else:
-            logging.info("Running in prod mode.")
-
-        # Append some extra information to our discord bot
-        self.bot.version = self.version  # Package version with bot
 
         # DB Setup
         try:
@@ -97,6 +75,10 @@ class FopsBot:
             self.dbReady = False
         finally:
             logging.info("Done configuring DB")
+
+        # Append our workdir to the path (for importing modules)
+        self.workdir = "/app/fops_bot/"
+        sys.path.append(self.workdir)
 
     async def load_cogs(self):
         # Cog Loader!

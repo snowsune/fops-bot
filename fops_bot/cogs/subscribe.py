@@ -27,6 +27,16 @@ def get_all_in_guild(guild_id: int) -> List[Subscription]:
         return list(session.query(Subscription).filter_by(guild_id=guild_id).all())
 
 
+def to_epoch(dt):
+    # TODO: Could refactor this, theres no real need to store
+    # the actual tz utc or otherwise in last_ran
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    else:
+        dt = dt.astimezone(timezone.utc)
+    return int(dt.timestamp())
+
+
 class SubscribeCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -59,10 +69,16 @@ class SubscribeCog(commands.Cog):
                     .all()
                 )
             if subs:
-                sub_lines = [
-                    f"- `{sub.service_type}`: `{sub.search_criteria}` with filters `{sub.filters}`"
-                    for sub in subs
-                ]
+                sub_lines = []
+                for sub in subs:
+                    if sub.last_ran is not None:
+                        epoch = to_epoch(sub.last_ran)
+                        last_ran_str = f"<t:{epoch}:R>"
+                    else:
+                        last_ran_str = "never"
+                    sub_lines.append(
+                        f"- `{sub.service_type}`: `{sub.search_criteria}` with filters `{sub.filters}` (last checked: {last_ran_str})"
+                    )
                 embed.description = (embed.description or "") + (
                     "\n" + "\n".join(sub_lines) if sub_lines else ""
                 )
@@ -89,12 +105,17 @@ class SubscribeCog(commands.Cog):
         guild_id = interaction.guild.id  # type: ignore
         subscriptions = get_all_in_guild(guild_id)
         if subscriptions:
-            desc = "\n".join(
-                [
-                    f"- `{sub.service_type}`: `{sub.search_criteria}` in <#{getattr(sub, 'channel_id', 'unknown')}> with filters `{sub.filters}`"
-                    for sub in subscriptions
-                ]
-            )
+            desc_lines = []
+            for sub in subscriptions:
+                if sub.last_ran is not None:
+                    epoch = to_epoch(sub.last_ran)
+                    last_ran_str = f"<t:{epoch}:R>"
+                else:
+                    last_ran_str = "never"
+                desc_lines.append(
+                    f"- `{sub.service_type}`: `{sub.search_criteria}` in <#{getattr(sub, 'channel_id', 'unknown')}> with filters `{sub.filters}` (last checked: {last_ran_str})"
+                )
+            desc = "\n".join(desc_lines)
         else:
             desc = "No subscriptions configured in this guild."
         embed = discord.Embed(
