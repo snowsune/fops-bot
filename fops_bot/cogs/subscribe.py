@@ -27,16 +27,6 @@ def get_all_in_guild(guild_id: int) -> List[Subscription]:
         return list(session.query(Subscription).filter_by(guild_id=guild_id).all())
 
 
-def to_epoch(dt):
-    # TODO: Could refactor this, theres no real need to store
-    # the actual tz utc or otherwise in last_ran
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    else:
-        dt = dt.astimezone(timezone.utc)
-    return int(dt.timestamp())
-
-
 class SubscribeCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -72,8 +62,7 @@ class SubscribeCog(commands.Cog):
                 sub_lines = []
                 for sub in subs:
                     if sub.last_ran is not None:
-                        epoch = to_epoch(sub.last_ran)
-                        last_ran_str = f"<t:{epoch}:R>"
+                        last_ran_str = f"<t:{sub.last_ran}:R>"
                     else:
                         last_ran_str = "never"
                     sub_lines.append(
@@ -108,8 +97,7 @@ class SubscribeCog(commands.Cog):
             desc_lines = []
             for sub in subscriptions:
                 if sub.last_ran is not None:
-                    epoch = to_epoch(sub.last_ran)
-                    last_ran_str = f"<t:{epoch}:R>"
+                    last_ran_str = f"<t:{sub.last_ran}:R>"
                 else:
                     last_ran_str = "never"
                 desc_lines.append(

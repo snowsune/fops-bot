@@ -81,19 +81,9 @@ class FA_PollerCog(commands.Cog):
             # ============================================
             # 2. Select group to process (oldest last_ran)
             # ============================================
-            def to_utc(dt):
-                if dt is None:
-                    return None
-                if dt.tzinfo is None:
-                    return dt.replace(tzinfo=timezone.utc)
-                return dt.astimezone(timezone.utc)
-
             def group_last_ran(group):
-                times = [to_utc(s.last_ran) for s in group if s.last_ran is not None]
-                times = [t for t in times if t is not None]
-                return (
-                    min(times) if times else datetime.min.replace(tzinfo=timezone.utc)
-                )
+                times = [s.last_ran or 0 for s in group]
+                return min(times) if times else 0
 
             oldest_group = min(groups.values(), key=group_last_ran)
             search_criteria = oldest_group[0].search_criteria
@@ -113,7 +103,7 @@ class FA_PollerCog(commands.Cog):
                 gallery, _ = api.gallery(search_criteria, 1)
             except Exception as e:
                 self.logger.warning(f"FA API error for {search_criteria}: {e}")
-                now = datetime.now(timezone.utc)
+                now = int(time.time())
                 for sub in oldest_group:
                     sub.last_ran = now
                 session.commit()
@@ -123,7 +113,7 @@ class FA_PollerCog(commands.Cog):
                 return
             if not gallery:
                 self.logger.warning(f"No gallery for {search_criteria}.")
-                now = datetime.now(timezone.utc)
+                now = int(time.time())
                 for sub in oldest_group:
                     sub.last_ran = now
                 session.commit()
@@ -134,7 +124,7 @@ class FA_PollerCog(commands.Cog):
 
             latest_posts = gallery[:5]
             ids = [str(post.id) for post in latest_posts]
-            now = datetime.now(timezone.utc)
+            now = int(time.time())
             self.logger.debug(f"Latest post IDs for '{search_criteria}': {ids}")
 
             # =========================================
