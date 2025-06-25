@@ -55,16 +55,28 @@ class FopsBot:
         # Some local memory flags
         self.dbReady = False
 
-        # Get the build commit that the code was built with.
-        self.version = str(os.environ.get("GIT_COMMIT"))  # Currently running version
-
         # Create our discord bot
         self.bot = commands.Bot(command_prefix="^", intents=intents)
-        # Set version attribute on bot for cogs
-        self.bot.version = self.version
 
         # Remove legacy help command
         self.bot.remove_command("help")
+
+        # Get the build commit that the code was built with.
+        self.version = str(os.environ.get("GIT_COMMIT"))  # Currently running version
+        # Find out if we're running in debug mode, or not.
+        self.debug = str(os.environ.get("DEBUG", "0")).lower() in (
+            "true",
+            "1",
+            "t",
+            "yes",
+        )
+
+        # Append our workdir to the path (for importing modules)
+        self.workdir = "/app/fops_bot/"
+        sys.path.append(self.workdir)
+
+        # Append some extra information to our discord bot
+        self.bot.version = self.version  # Package version with bot
 
         # DB Setup
         try:
@@ -76,21 +88,12 @@ class FopsBot:
         finally:
             logging.info("Done configuring DB")
 
-        # Append our workdir to the path (for importing modules)
-        self.workdir = "/app/fops_bot/"
-        sys.path.append(self.workdir)
-
     async def load_cogs(self):
         # Cog Loader!
         logging.info("Loading cogs...")
-        cogs_dir = self.workdir + "cogs"
-        for filename in os.listdir(cogs_dir):
-            full_path = os.path.join(cogs_dir, filename)
-
-            if os.path.isdir(full_path):
-                continue
+        for filename in os.listdir(self.workdir + "cogs"):
+            logging.info(f"Found file {filename}, loading as extension.")
             if filename.endswith(".py") and not filename.startswith("_"):
-                logging.info(f"Found file {filename}, loading as extension.")
                 try:
                     await self.bot.load_extension(f"cogs.{filename[:-3]}")
                 except Exception as e:
@@ -98,14 +101,14 @@ class FopsBot:
                     raise e
         logging.info("Done loading cogs")
 
-    async def on_ready(self):
+    # Standalone on_ready event for the bot
+    async def on_ready_logic(self):
         # Start health monitoring
         logging.info(
             "Preparing external monitoring (using discordhealthcheck https://pypi.org/project/discordhealthcheck/)"
         )
         self.healthcheck_server = await discordhealthcheck.start(self.bot)
         logging.info("Done prepping external monitoring")
-
         await self.bot.tree.sync()
 
     async def on_message(self, ctx):
@@ -121,6 +124,11 @@ class FopsBot:
 
         # Begin the cog loader
         await self.load_cogs()
+
+        # Register old on_ready in the new discord.py way
+        @self.bot.event
+        async def on_ready():
+            await self.on_ready_logic()
 
         # Run the discord bot using our token.
         await self.bot.start(str(os.environ.get("BOT_TOKEN")))
