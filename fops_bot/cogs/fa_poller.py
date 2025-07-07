@@ -173,6 +173,24 @@ class FA_PollerCog(commands.Cog):
                         continue
                     tags = set(submission.tags or [])
                     tags = {t.lower() for t in tags}
+
+                    # Add a rating as a special tag when filtering
+                    # This is to allow for booru-style filtering
+                    # like rating:safe or -rating:explicit
+                    rating = getattr(submission, "rating", None)
+                    if rating:
+                        rating = rating.lower()
+                        if rating == "general":
+                            tags.add("rating:safe")
+                        elif rating in ("mature", "adult"):
+                            tags.add("rating:explicit")
+                        else:
+                            self.logger.warning(
+                                f"Unknown rating {rating} in submission {submission.id}."
+                            )
+                            tags.add("rating:questionable")  # Hard to handle so, idk
+
+                    # Ready to sort
                     self.logger.debug(f"Post {post_id} tags: {tags}")
                     if positive_filters and not (tags & positive_filters):
                         self.logger.info(
@@ -184,13 +202,18 @@ class FA_PollerCog(commands.Cog):
                             f"Skipping {post_id} due to excluded tags: {negative_filters} (tags: {tags})"
                         )
                         continue
+
+                    # Send
                     url = f"https://www.furaffinity.net/view/{post_id}/"
                     use_xfa = False
                     channel = None
+
                     if sub.is_pm:
                         pass
                     else:
-                        channel = self.bot.get_channel(sub.channel_id)
+                        channel = await self.bot.fetch_channel(int(sub.channel_id))
+
+                        # Optionally use xfa if channel is nsfw
                         if (
                             channel
                             and hasattr(channel, "is_nsfw")
@@ -199,8 +222,11 @@ class FA_PollerCog(commands.Cog):
                             use_xfa = True
                     if use_xfa:
                         url = f"https://www.xfuraffinity.net/view/{post_id}/"
+
                     subtitle = "\n-# Run /manage_following to edit this feed."
                     msg = f"{url}{subtitle}"
+
+                    # Send everything
                     try:
                         if sub.is_pm:
                             self.logger.info(
@@ -213,7 +239,16 @@ class FA_PollerCog(commands.Cog):
                                 f"Processing {post_id} in {new_ids} for channel {sub.channel_id}"
                             )
                             if channel:
-                                await channel.send(msg)
+                                try:
+                                    await channel.send(msg)
+                                except Exception as e:
+                                    self.logger.error(
+                                        f"Error posting FA update to channel {sub.channel_id}: {e}"
+                                    )
+                            else:
+                                self.logger.error(
+                                    f"Channel {sub.channel_id} not found for sub {sub.id}"
+                                )
                     except Exception as e:
                         self.logger.error(f"Error posting FA update: {e}")
                 if new_ids:

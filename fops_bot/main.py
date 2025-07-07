@@ -49,7 +49,12 @@ for h in discord_logger.handlers[:]:
 class FopsBot:
     def __init__(self):
         # Intents (new iirc)
-        intents = Intents(messages=True, reactions=True, guilds=True, members=True)
+        intents = discord.Intents.default()
+        intents.guilds = True
+        intents.guild_messages = True
+        intents.messages = True
+        intents.reactions = True
+        intents.members = True
         intents.message_content = True
 
         # Some local memory flags

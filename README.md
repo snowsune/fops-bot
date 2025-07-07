@@ -181,3 +181,7 @@ but it allows you to follow (at least for now) FA, and eventually e6 and
 booru posts with filters!
 
 TY!
+
+## Changelog 19
+
+Added sorting by `rating:safe` and `rating:explicit` to FA subscriptions!
