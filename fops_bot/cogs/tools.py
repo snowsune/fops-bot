@@ -21,6 +21,7 @@ from utilities.database import (
     get_db_info,
 )
 from fops_bot.cogs.changelog import get_current_changelog
+from fops_bot.models import get_session, KeyValueStore
 
 
 class ToolCog(commands.Cog, name="ToolsCog"):
@@ -94,6 +95,7 @@ class ToolCog(commands.Cog, name="ToolsCog"):
         pg_version = "Unknown"
         changelog_title = "Unknown"
         github_link = "Unknown"
+        fa_last_poll_str = None
 
         # yt-dlp version
         try:
@@ -155,6 +157,11 @@ class ToolCog(commands.Cog, name="ToolsCog"):
         except Exception as e:
             self.logger.error(f"Couldn't check db at all, error was {e}")
 
+        with get_session() as session:
+            kv = session.get(KeyValueStore, "fa_last_poll")
+            if kv and kv.value:
+                fa_last_poll_str = f"Last FA Poll was <t:{kv.value}:R>."
+
         msg = (
             f"**Version:** `{self.bot.version}`\n"
             f"**GitHub:** {github_link}\n"
@@ -163,6 +170,8 @@ class ToolCog(commands.Cog, name="ToolsCog"):
             f"**DB status:** `{dbstatus}` (access `{vc}`)\n"
             f"**Last changelog:** {changelog_title}"
         )
+        if fa_last_poll_str:
+            msg += f"\n{fa_last_poll_str}"
         await ctx.response.send_message(msg)
 
     @app_commands.command(name="enable_nsfw")
