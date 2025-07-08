@@ -1,0 +1,92 @@
+body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    margin: 0;
+    background: #23272a;
+    color: #f5f6fa;
+}
+
+.header {
+    background: #1a1d21;
+    color: #ffa726;
+    padding: 0.7em 2em 0.5em 2em;
+    font-size: 1.5em;
+    font-weight: bold;
+    letter-spacing: 2px;
+    box-shadow: 0 2px 8px #1118;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.stats {
+    margin: 2em auto 2em auto;
+    max-width: 600px;
+    background: #2c2f33;
+    border-radius: 8px;
+    padding: 1.5em 2em;
+    box-shadow: 0 1px 4px #1118;
+}
+.stats p {
+    margin: 0.5em 0;
+    color: #ffa726;
+    font-size: 1.1em;
+}
+.stats strong {
+    color: #f5f6fa;
+}
+
+.commands {
+    margin: 2em auto;
+    max-width: 700px;
+}
+.commands h2 {
+    color: #ffa726;
+    margin-bottom: 1em;
+}
+.command {
+    margin-bottom: 1em;
+    padding: 1em;
+    background: #36393f;
+    border-radius: 6px;
+    box-shadow: 0 1px 4px #1118;
+}
+.command-name {
+    font-weight: bold;
+    color: #ffa726;
+    font-size: 1.1em;
+}
+.command-doc {
+    margin-top: 0.5em;
+    color: #f5f6fa;
+    font-size: 1em;
+}
+
+pre, code {
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+a {
+    color: #f5f6fa;
+    text-decoration: underline;
+    transition: color 0.2s;
+}
+a:hover {
+    color: #ffa726;
+}
+
+.invite-link {
+    color: #ffa726;
+    background: #23272a;
+    border: 1px solid #ffa726;
+    border-radius: 4px;
+    padding: 0.2em 0.8em;
+    margin-left: 1.5em;
+    text-decoration: none;
+    font-size: 0.9em;
+    transition: background 0.2s, color 0.2s;
+}
+.invite-link:hover {
+    background: #ffa726;
+    color: #23272a;
+} 

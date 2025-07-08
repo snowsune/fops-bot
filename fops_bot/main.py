@@ -8,8 +8,10 @@ import asyncio
 import logging
 import random
 import colorlog
+import time
 
 import discordhealthcheck
+import fops_bot.web_dashboard as web_dashboard
 
 import discord
 from discord import Intents, app_commands
@@ -82,6 +84,10 @@ class FopsBot:
 
         # Append some extra information to our discord bot
         self.bot.version = self.version  # Package version with bot
+
+        # Start dashboard web server
+        self.start_time = time.time()
+        web_dashboard.start_dashboard(self.bot, self.start_time)
 
         # DB Setup
         try:
