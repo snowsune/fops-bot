@@ -30,24 +30,7 @@ class BooruPollerCog(commands.Cog):
 
     async def booru_poll_loop(self):
         while True:
-            interval_minutes = 5  # fallback default
-            try:
-                with get_session() as session:
-                    booru_subs = (
-                        session.query(Subscription)
-                        .filter_by(service_type="BixiBooru")
-                        .order_by(Subscription.id)
-                        .all()
-                    )
-                    num_subs = len(booru_subs)
-                    if num_subs > 0:
-                        interval_minutes = max(1, 60 // num_subs)
-                    else:
-                        interval_minutes = 5
-            except Exception as e:
-                self.logger.error(f"Error calculating Booru poll interval: {e}")
-                interval_minutes = 5
-
+            interval_seconds = 45  # fixed interval
             try:
                 await self.booru_poll_task_once()
             except Exception as e:
@@ -55,9 +38,9 @@ class BooruPollerCog(commands.Cog):
                     f"Unhandled exception in booru_poll_task_once: {e}", exc_info=True
                 )
             self.logger.debug(
-                f"Booru poller cycle complete. Waiting {interval_minutes} minutes to run again."
+                f"Booru poller cycle complete. Waiting {interval_seconds} seconds to run again."
             )
-            await asyncio.sleep(interval_minutes * 60)
+            await asyncio.sleep(interval_seconds)
 
     async def booru_poll_task_once(self):
         self.logger.debug("Running Booru poller")
