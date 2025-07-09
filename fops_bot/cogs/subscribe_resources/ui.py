@@ -58,12 +58,11 @@ class AddSubscriptionModal(discord.ui.Modal, title="Add Subscription"):
         self.search_input = discord.ui.TextInput(
             label="Search/Username", custom_id="search_criteria", required=True
         )
-        if service_type not in ["BixiBooru", "e621"]:
-            self.filters_input = discord.ui.TextInput(
-                label="Filters (comma-separated, optional)",
-                custom_id="filters",
-                required=False,
-            )
+        self.filters_input = discord.ui.TextInput(
+            label="Filters (comma-separated, optional)",
+            custom_id="filters",
+            required=False,
+        )
         self.add_item(self.search_input)
         self.add_item(self.filters_input)
 
