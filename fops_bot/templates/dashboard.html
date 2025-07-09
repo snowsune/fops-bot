@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>FopsBot</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+    <div class="header">
+        FopsBot
+        <a class="invite-link" href="https://discord.com/oauth2/authorize?client_id=983461462896963744"
+            target="_blank">Invite</a>
+    </div>
+    <div class="stats">
+        <p><strong>Version:</strong> {{ version }}</p>
+        <p><strong>Uptime:</strong> {{ uptime }}</p>
+        <p><strong>Active Guilds:</strong> {{ guild_count }}</p>
+        <p><strong>Commands Used Today:</strong> {{ usage_today }}</p>
+    </div>
+    <div class="commands">
+        <h2>Commands</h2>
+        {% for cmd in commands %}
+        <div class="command">
+            <span class="command-name">/{{ cmd.name }}</span>
+            <div class="command-doc">{{ cmd.help|safe }}</div>
+        </div>
+        {% else %}
+        <p>No commands found.</p>
+        {% endfor %}
+    </div>
+</body>
+
+</html>

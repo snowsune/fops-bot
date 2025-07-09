@@ -42,12 +42,10 @@ class ImageCog(commands.Cog, name="ImageCog"):
             # Add the command to the bot
             self.bot.tree.add_command(context_menu)
 
+    # Handle image processing via context menu.
     async def process_image_context(
         self, interaction: discord.Interaction, message: discord.Message
     ):
-        """
-        Handle image processing via context menu.
-        """
         task_name = interaction.command.task_name
         await self.process_image_task(interaction, task_name, message)
 

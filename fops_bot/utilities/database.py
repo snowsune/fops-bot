@@ -33,9 +33,20 @@ def get_all_guilds() -> List[Guild]:
         return list(session.scalars(select(Guild)))
 
 
-def is_feature_enabled(guild_id: int, feature_name: str, default: bool = False) -> bool:
+def ensure_guild_exists(session, guild_id: int, guild_name: str = ""):
+    guild = session.get(Guild, guild_id)
+    if not guild:
+        guild = Guild(guild_id=guild_id, name=guild_name)
+        session.add(guild)
+        session.commit()
+
+
+def is_feature_enabled(
+    guild_id: int, feature_name: str, default: bool = False, guild_name: str = ""
+) -> bool:
     """Check if a feature is enabled for a guild."""
     with get_session() as session:
+        ensure_guild_exists(session, guild_id, guild_name or "")
         stmt = select(Feature).where(
             Feature.guild_id == guild_id, Feature.feature_name == feature_name
         )
@@ -58,9 +69,11 @@ def set_feature_state(
     feature_name: str,
     enabled: bool,
     feature_variables: Optional[str] = None,
+    guild_name: str = "",
 ) -> None:
     """Set the state and variables for a feature in a guild."""
     with get_session() as session:
+        ensure_guild_exists(session, guild_id, guild_name or "")
         stmt = select(Feature).where(
             Feature.guild_id == guild_id, Feature.feature_name == feature_name
         )

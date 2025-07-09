@@ -20,13 +20,10 @@ class VixiThinks(commands.Cog):
         )
         self.bot.tree.add_command(self.context_menu)
 
+    # Context only~ lets you know what vixi thinks!
     async def vixi_thinks(
         self, interaction: discord.Interaction, message: discord.Message
     ):
-        """
-        Forwards the message to Vixi (OWNER_UID) via DM and waits for a response.
-        Replies to the original message with the response.
-        """
         await interaction.response.send_message("Vixi is thinking...", ephemeral=True)
 
         owner = self.bot.get_user(OWNER_UID) or await self.bot.fetch_user(OWNER_UID)
