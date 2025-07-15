@@ -185,3 +185,7 @@ TY!
 ## Changelog 19
 
 Added sorting by `rating:safe` and `rating:explicit` to FA subscriptions!
+
+## Changelog 20
+
+Add support for BixiBooru subscriptions~

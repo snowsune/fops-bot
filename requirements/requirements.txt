@@ -12,3 +12,5 @@ sqlalchemy
 alembic
 colorlog
 faapi
+Flask>=2.0.0
+markdown2>=2.4.0

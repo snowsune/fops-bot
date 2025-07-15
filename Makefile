@@ -36,7 +36,7 @@ shell: ## Get container shell
 	docker-compose run --entrypoint "/bin/bash" fops_bot
 
 run: build ## Run command in container
-	docker-compose run --remove-orphans fops_bot $(COMMAND)
+	docker-compose run --remove-orphans fops_bot $(COMMAND) 
 
 stop: ## Stop container
 	docker-compose down

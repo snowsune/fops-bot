@@ -114,7 +114,7 @@ class Changelog(commands.Cog, name="ChangeLogCog"):
         self, ctx: discord.Interaction, channel: discord.TextChannel
     ):
         """
-        Set the channel to receive changelog alerts for the guild.
+        Use this command to set where changelog events should be printed!
         """
         guild_id = ctx.guild_id
 
@@ -129,7 +129,7 @@ class Changelog(commands.Cog, name="ChangeLogCog"):
     @app_commands.checks.has_permissions(administrator=True)
     async def disable_changelog_alert_channel(self, ctx: discord.Interaction):
         """
-        Disable changelog alerts for the guild.
+        Disable changelog updates in a guild.
         """
         guild_id = ctx.guild_id
 

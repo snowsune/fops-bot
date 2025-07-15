@@ -87,7 +87,8 @@ class ServiceDropdown(discord.ui.Select):
     def __init__(self, on_select_callback):
         options = [
             discord.SelectOption(label="FurAffinity", value="FurAffinity"),
-            discord.SelectOption(label="e6", value="e6"),
+            discord.SelectOption(label="e621", value="e621"),
+            discord.SelectOption(label="BixiBooru", value="BixiBooru"),
         ]
         super().__init__(
             placeholder="Select a service...",

@@ -42,6 +42,20 @@ class SubscribeCog(commands.Cog):
         description="Manage your followed FA/E6 feeds in this guild.",
     )
     async def manage_following(self, interaction: discord.Interaction):
+        """
+        Manages your subscriptions to [furaffinity](https://www.furaffinity.net/), [e621](https://e621.net/), [booru.kitsunehosting.net](https://booru.kitsunehosting.net/) and more!
+
+        Run this command anywhere to get started. You can attach a follower command to any channel
+        in the group you're currently in. or a PM
+
+        You can use both positive and negative filters for sorting. Heres some examples:
+
+         - `-irl`         Any post that does not contain `irl`
+         - `rating:safe`  Only posts that have a safe rating
+         - ` `            Any post
+         - `vulpine`      Only posts with vulpine as a tag
+        """
+
         if isinstance(interaction.channel, discord.DMChannel):
             # Allow personal message setup in DMs
             desc = "Configure personal message subscriptions."

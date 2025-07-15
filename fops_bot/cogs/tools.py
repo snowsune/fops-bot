@@ -30,6 +30,7 @@ class ToolCog(commands.Cog, name="ToolsCog"):
         self.logger = logging.getLogger(__name__)
         self.command_counter = 0  # Initialize a command counter
         self.start_time = datetime.now()  # Track when the bot started
+        self.bot.usage_today = self.command_counter
 
     @commands.Cog.listener()
     async def on_ready(self):
@@ -63,8 +64,8 @@ class ToolCog(commands.Cog, name="ToolsCog"):
         """
         Increment the command counter every time a command is run.
         """
-
         self.command_counter += 1
+        self.bot.usage_today = self.command_counter
 
     @tasks.loop(seconds=1)
     async def reset_counter_task(self):
@@ -75,6 +76,7 @@ class ToolCog(commands.Cog, name="ToolsCog"):
             seconds_to_midnight = seconds_until(0, 0)
             await asyncio.sleep(seconds_to_midnight)
             self.command_counter = 0
+            self.bot.usage_today = self.command_counter
             self.logger.info("Command counter reset at midnight.")
 
     @app_commands.command(name="invite_bot")
@@ -87,7 +89,13 @@ class ToolCog(commands.Cog, name="ToolsCog"):
     @app_commands.command(name="version")
     async def version(self, ctx: discord.Interaction):
         """
-        Prints the revision/version, yt-dlp version, Postgres version, GitHub hash link, and last changelog title.
+        Prints
+
+         - revision/version
+         - yt-dlp version
+         - Postgres version
+         - GitHub hash link
+         - and last changelog title
         """
         dbstatus = "Unknown"
         vc = None
@@ -189,12 +197,10 @@ class ToolCog(commands.Cog, name="ToolsCog"):
             f"NSFW functions have been {status} for this guild.", ephemeral=True
         )
 
+    # Just pins the admin channel
     @app_commands.command(name="admin_ping")
     @app_commands.checks.has_permissions(administrator=True)
     async def admin_ping(self, ctx: discord.Interaction):
-        """
-        Pings the admin-configured channel.
-        """
         guild_id = cast(int, ctx.guild_id)  # Cast to ensure non-None
 
         # Get feature data (enabled status and variables) for this guild
