@@ -49,9 +49,10 @@ async def poll_yt_dlp_status(session, job_id, timeout=60):
     return False
 
 
-async def download_yt_dlp_result(session, job_id, dest_path):
+async def download_yt_dlp_result(session, job_id, dest_dir):
     async with session.get(f"{YTDLP_API_URL}/result/{job_id}") as resp:
         if resp.status == 200:
+            dest_path = os.path.join(dest_dir, f"{job_id}.mp4")
             with open(dest_path, "wb") as f:
                 while True:
                     chunk = await resp.content.read(1024 * 1024)

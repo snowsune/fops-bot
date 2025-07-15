@@ -26,26 +26,38 @@ def convert_twitter_link_to_alt(
 
 
 def run_yt_dlp(url: str, output_dir: str, job_id: str) -> str | None:
-    """Run yt-dlp and return the output file path, or None on failure."""
+    """Run yt-dlp and return the output mp4 file path, or None on failure."""
     if os.path.isdir(output_dir):
         try:
             os.rmdir(output_dir)
         except OSError:
             shutil.rmtree(output_dir)
     os.makedirs(output_dir, exist_ok=True)
-    out_template = os.path.join(output_dir, f"{job_id}.%(ext)s")
+    out_template = os.path.join(output_dir, f"{job_id}.mp4")
     try:
         result = subprocess.run(
-            ["yt-dlp", url, "-o", out_template], capture_output=True, text=True
+            [
+                "yt-dlp",
+                url,
+                "-o",
+                out_template,
+                "--merge-output-format",
+                "mp4",  # For best compatibilty.
+                "-f",
+                "mp4/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+            ],
+            capture_output=True,
+            text=True,
         )
         if result.returncode != 0:
             logging.error(f"yt-dlp failed: {result.stderr}")
             return None
-        files = os.listdir(output_dir)
-        if not files:
-            logging.error("No files found in output directory")
+        # Check for the mp4 file
+        if os.path.isfile(out_template):
+            return out_template
+        else:
+            logging.error("yt-dlp did not produce an mp4 file")
             return None
-        return os.path.join(output_dir, files[0])
     except Exception as e:
         logging.error(f"yt-dlp exception: {e}")
         return None
