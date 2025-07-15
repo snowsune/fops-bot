@@ -1,0 +1,17 @@
+# Ignore everything by default
+**/*
+
+# Except these:
+!Dockerfile
+!requirements.txt
+!test_requirements.txt
+!main.py
+!__main__.py
+!models.py
+!web_dashboard.py
+!cogs/
+!utilities/
+!static/
+!templates/
+!scripts/
+!alembic/

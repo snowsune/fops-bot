@@ -62,14 +62,20 @@ jobs:
       #     args: "Black formatter reported errors in {{ EVENT_PAYLOAD.pull_request.html_url }} !"
 
   build-and-publish-image:
-    name: Build and Publish Registry Image
+    name: Build and Publish Docker Images
     runs-on: ubuntu-latest
-    needs: [formatblack] # Keeps the bot from updating the image if its not tested/formatted
-
-    permissions:
-      contents: read
-      packages: write
-
+    needs: [formatblack]
+    strategy:
+      matrix:
+        include:
+          - service: fops_bot
+            context: ./fops_bot
+            tag: ghcr.io/snowsune/fops-bot:${{ github.sha }}
+            notify_name: Fops Bot
+          - service: yt_dlp_service
+            context: ./yt_dlp_service
+            tag: ghcr.io/snowsune/yt-dlp-service:${{ github.sha }}
+            notify_name: yt-dlp Service
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -88,38 +94,20 @@ jobs:
         id: meta
         uses: docker/metadata-action@v3
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-
-      - name: Extract Version information for fops_bot
-        id: extract_hash
-        run: |
-          echo BUILD_HASH=$(git describe --abbrev=8 --always --tags --dirty) >> $GITHUB_ENV
-
-      - name: Get branch name
-        id: branch-name
-        uses: tj-actions/branch-names@v5.2
-
-      - name: Get a docker ready tag
-        run: |
-          echo "${{ steps.branch-name.outputs.current_branch }}"
-          echo "${{ steps.meta.outputs.tags }}"
-          echo "CUSTOM_TAG=ghcr.io/snowsune/fops-bot:$(echo "${{ steps.branch-name.outputs.current_branch }}" | sed 's/[^a-zA-Z0-9]/-/g; s/[A-Z]/\L&/g')" >> $GITHUB_ENV
+          images: ${{ matrix.tag }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v2
         with:
-          context: .
+          context: ${{ matrix.context }}
           push: true
-          build-args: |
-            GIT_COMMIT=${{ env.BUILD_HASH }}
-            DEBUG=False
-          tags: ${{ env.CUSTOM_TAG }}
+          tags: ${{ matrix.tag }}
           labels: ${{ steps.meta.outputs.labels }}
 
       - name: Get Docker image size
         id: image_size
         run: |
-          SIZE=$(docker images ${{ env.CUSTOM_TAG }} --format "{{.Size}}")
+          SIZE=$(docker images ${{ matrix.tag }} --format "{{.Size}}")
           echo "IMAGE_SIZE=$SIZE" >> $GITHUB_ENV
 
       - name: Discord notification
@@ -127,4 +115,4 @@ jobs:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         uses: ncatelli/action-discord@115-add-wait-parameter-prefix
         with:
-          args: "Built and published a new Fops Bot docker image to `${{ env.CUSTOM_TAG }}`! Image size: `${{ env.IMAGE_SIZE }}`"
+          args: "Built and published a new ${{ matrix.notify_name }} docker image to `${{ matrix.tag }}`! Image size: `${{ env.IMAGE_SIZE }}`"
