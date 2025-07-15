@@ -3,11 +3,11 @@ import logging
 import aiohttp
 import asyncio
 import os
+import tempfile
 from typing import Optional
 from discord.ext import commands
 from urllib.parse import urlparse, urlunparse
 
-DISCORD_FILE_SIZE_LIMIT = 8 * 1024 * 1024  # 8MB limit for Discord uploads
 YTDLP_API_URL = os.environ.get("YTDLP_API_URL", "http://yt-dlp:5000")
 
 
@@ -37,7 +37,8 @@ async def submit_yt_dlp_job(session, url):
         return data.get("job_id")
 
 
-async def poll_yt_dlp_status(session, job_id, timeout=60):
+async def poll_yt_dlp_status(session, job_id, timeout=300):
+    # timeout in seconds (default 5 minutes)
     for _ in range(timeout):
         async with session.get(f"{YTDLP_API_URL}/status/{job_id}") as resp:
             data = await resp.json()
@@ -46,20 +47,19 @@ async def poll_yt_dlp_status(session, job_id, timeout=60):
             elif data.get("status") == "failed":
                 return False
         await asyncio.sleep(1)
-    return False
+    return None  # Timed out
 
 
-async def download_yt_dlp_result(session, job_id, dest_dir):
+async def download_yt_dlp_result(session, job_id, temp_file_path):
     async with session.get(f"{YTDLP_API_URL}/result/{job_id}") as resp:
         if resp.status == 200:
-            dest_path = os.path.join(dest_dir, f"{job_id}.mp4")
-            with open(dest_path, "wb") as f:
+            with open(temp_file_path, "wb") as f:
                 while True:
                     chunk = await resp.content.read(1024 * 1024)
                     if not chunk:
                         break
                     f.write(chunk)
-            return dest_path
+            return temp_file_path
         return None
 
 
@@ -87,52 +87,70 @@ class YTDLP(commands.Cog):
 
     @commands.Cog.listener("on_message")
     async def mediaListener(self, message: discord.Message):
+        # Dont listen to bots
         if message.author.bot:
             return
+
+        # Check if the message contains a domanin we can convert
         domain = message_contains(message, self.valid_domains)
         if not domain:
             return
+
+        # We got one!
         self.logger.info(
             f'{self.valid_domains[domain]} Listener caught message "{message.content}"'
         )
         await message.add_reaction("⏳")
+
+        # Be explicit with twitter domains
         twitter_domains = {"x.com", "twitter.com"}
+        # Walk and find the URL
         url = next((word for word in message.content.split() if "://" in word), None)
+
+        # No URL
         if not url:
             await message.add_reaction("❌")
             return
-        temp_file = f"/tmp/yt_{message.id}.dat"
         async with aiohttp.ClientSession() as session:
+            temp_file = None
+            job_id = None
             try:
                 job_id = await submit_yt_dlp_job(session, url)
                 if not job_id:
                     await message.add_reaction("❌")
                     return
                 ok = await poll_yt_dlp_status(session, job_id)
-                if not ok:
+                if ok is True:
+                    # Download to a temp file for Discord upload
+                    with tempfile.NamedTemporaryFile(
+                        delete=False, suffix=".mp4"
+                    ) as tmp:
+                        temp_file = tmp.name
+                    result = await download_yt_dlp_result(session, job_id, temp_file)
+                    await cleanup_yt_dlp_job(session, job_id)
+                    if result and domain not in twitter_domains:
+                        try:
+                            await message.reply(file=discord.File(result))
+                        except discord.errors.HTTPException:
+                            await message.add_reaction("⚠️")
+                            await message.reply("❌ Media too large to post.")
+                    else:
+                        await message.add_reaction("❌")
+                elif ok is False:
                     await message.add_reaction("❌")
                     await cleanup_yt_dlp_job(session, job_id)
-                    return
-                result = await download_yt_dlp_result(session, job_id, temp_file)
-                if result and domain not in twitter_domains:
-                    try:
-                        await message.reply(file=discord.File(result))
-                    except discord.errors.HTTPException:
-                        await message.add_reaction("⚠️")
-                        await message.reply("❌ Media too large to post.")
-                    finally:
+                else:  # Timed out
+                    await message.add_reaction("⏰")
+                    await message.reply("❌ Download timed out.")
+                    if job_id:
                         await cleanup_yt_dlp_job(session, job_id)
-                        if os.path.exists(temp_file):
-                            os.remove(temp_file)
-                else:
-                    await message.add_reaction("❌")
-                    await cleanup_yt_dlp_job(session, job_id)
-                    if os.path.exists(temp_file):
-                        os.remove(temp_file)
             except Exception as e:
                 self.logger.warning(f"yt-dlp API error: {e}")
                 await message.add_reaction("⚠️")
-                if os.path.exists(temp_file):
+                if job_id:
+                    await cleanup_yt_dlp_job(session, job_id)
+            finally:
+                if temp_file and os.path.exists(temp_file):
                     os.remove(temp_file)
         await message.clear_reaction("⏳")
         if domain in twitter_domains:
@@ -148,13 +166,6 @@ class YTDLP(commands.Cog):
                     f"Originally posted by {message.author.mention}: {alt_link}"
                 )
                 await message.delete()
-                if os.path.exists(temp_file):
-                    try:
-                        await message.channel.send(file=discord.File(temp_file))
-                    except discord.errors.HTTPException:
-                        await message.channel.send("❌ Media too large to post.")
-                if os.path.exists(temp_file):
-                    os.remove(temp_file)
             except discord.errors.Forbidden:
                 self.logger.warning("Bot lacks permissions to delete messages.")
             except discord.errors.NotFound:
