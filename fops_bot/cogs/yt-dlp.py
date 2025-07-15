@@ -1,15 +1,14 @@
 import discord
 import logging
-import subprocess
+import aiohttp
+import asyncio
 import os
-import shutil
-
 from typing import Optional
 from discord.ext import commands
-
 from urllib.parse import urlparse, urlunparse
 
 DISCORD_FILE_SIZE_LIMIT = 8 * 1024 * 1024  # 8MB limit for Discord uploads
+YTDLP_API_URL = os.environ.get("YTDLP_API_URL", "http://yt-dlp:5000")
 
 
 def convert_twitter_link_to_alt(
@@ -18,7 +17,6 @@ def convert_twitter_link_to_alt(
     try:
         parsed = urlparse(original_url)
         if parsed.netloc in {"x.com", "twitter.com"}:
-            # Replace the domain only
             new_url = parsed._replace(netloc=alt_domain)
             return urlunparse(new_url)
     except Exception as e:
@@ -26,133 +24,46 @@ def convert_twitter_link_to_alt(
     return original_url
 
 
-class VideoExtractor:
-    def __init__(self, _content):
-        self.message_content = _content
-        self.output_dir = "/tmp/ytdlp_output"
-        self.compressed_file = None
-        self.file_path = None
-
-    def __enter__(self) -> Optional[str]:
-        logging.info(f"Video Extractor Processing {self.message_content}")
-
-        # Extract the URL
-        url = next(
-            (word for word in self.message_content.split() if "://" in word), None
-        )
-
-        if not url:
-            logging.warning(
-                f'Found link in message "{self.message_content}" but could not extract url'
-            )
-            return None  # No valid URL found
-
-        # Create output directory
-        if os.path.isdir(self.output_dir):
-            try:
-                os.rmdir(self.output_dir)
-            except OSError:
-                logging.warn("Had to remove leftover files..")
-                shutil.rmtree(self.output_dir)
-        os.makedirs(self.output_dir)
-
-        # Execute yt-dlp with the URL
-        try:
-            command = [
-                "yt-dlp",
-                url,
-                "-o",
-                os.path.join(self.output_dir, "%(title)s.%(ext)s"),
-            ]
-            subprocess.run(command, check=True)
-        except subprocess.CalledProcessError as e:
-            logging.error(f"yt-dlp failed: {e}")
-            return None
-
-        # Find the video or image file it produced
-        files = os.listdir(self.output_dir)
-        if not files:
-            logging.error("No files found in output directory")
-            return None
-
-        self.file_path = os.path.join(self.output_dir, files[0])
-
-        # If we succeed, return this object
-        try:
-            if os.path.isfile(self.file_path):
-                return self
-        except Exception as e:
-            logging.warn(f"TODO: bug in video extractor lol {e}")
-            pass
-        return None
-
-    def path(self):
-        return self.file_path
-
-    def compress_file(self) -> Optional[str]:
-        """
-        Compress the file using ffmpeg if it's too large.
-        """
-        # Compress only if the file exists and is larger than the Discord limit
-        if os.path.getsize(self.file_path) > DISCORD_FILE_SIZE_LIMIT:
-            logging.info(f"File size too large, compressing {self.file_path}")
-
-            # Define the path for the compressed file
-            self.compressed_file = self.file_path.replace(".", "_compressed.")
-            try:
-                # Run ffmpeg to compress the video more aggressively
-                subprocess.run(
-                    [
-                        "ffmpeg",
-                        "-i",
-                        self.file_path,
-                        "-vf",
-                        "scale=iw/4:ih/4",  # Resize by quarter
-                        "-b:v",
-                        "500k",  # Set video bitrate to 500kbps
-                        "-maxrate",
-                        "500k",  # Cap max bitrate
-                        "-bufsize",
-                        "1000k",  # Buffer size for bitrate control
-                        "-r",
-                        "24",  # Reduce frame rate to 24 fps
-                        "-c:a",
-                        "aac",  # Encode audio to AAC for smaller size
-                        "-b:a",
-                        "128k",  # Set audio bitrate to 128kbps
-                        self.compressed_file,
-                    ],
-                    check=True,
-                )
-
-                if os.path.getsize(self.compressed_file) <= DISCORD_FILE_SIZE_LIMIT:
-                    return self.compressed_file
-                else:
-                    logging.error("Compressed file is still too large.")
-                    return None
-            except subprocess.CalledProcessError as e:
-                logging.error(f"ffmpeg compression failed: {e}")
-                return None
-        return self.file_path
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        if self.file_path:
-            if os.path.isfile(self.file_path):
-                os.remove(self.file_path)
-            if self.compressed_file and os.path.isfile(self.compressed_file):
-                os.remove(self.compressed_file)
-        os.rmdir(self.output_dir)
-
-
 def message_contains(message: discord.Message, valid_domains: dict) -> Optional[str]:
-    """
-    Checks if the message contains a URL from a valid domain.
-    Returns the domain if found, otherwise None.
-    """
     for domain in valid_domains:
         if domain in message.content.lower():
             return domain
     return None
+
+
+async def submit_yt_dlp_job(session, url):
+    async with session.post(f"{YTDLP_API_URL}/submit", json={"url": url}) as resp:
+        data = await resp.json()
+        return data.get("job_id")
+
+
+async def poll_yt_dlp_status(session, job_id, timeout=60):
+    for _ in range(timeout):
+        async with session.get(f"{YTDLP_API_URL}/status/{job_id}") as resp:
+            data = await resp.json()
+            if data.get("status") == "done":
+                return True
+            elif data.get("status") == "failed":
+                return False
+        await asyncio.sleep(1)
+    return False
+
+
+async def download_yt_dlp_result(session, job_id, dest_path):
+    async with session.get(f"{YTDLP_API_URL}/result/{job_id}") as resp:
+        if resp.status == 200:
+            with open(dest_path, "wb") as f:
+                while True:
+                    chunk = await resp.content.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    f.write(chunk)
+            return dest_path
+        return None
+
+
+async def cleanup_yt_dlp_job(session, job_id):
+    await session.post(f"{YTDLP_API_URL}/cleanup/{job_id}")
 
 
 class YTDLP(commands.Cog):
@@ -175,61 +86,56 @@ class YTDLP(commands.Cog):
 
     @commands.Cog.listener("on_message")
     async def mediaListener(self, message: discord.Message):
-        """
-        Listener for messages containing media URLs. Handles various domains like Instagram, Facebook, Twitter.
-        """
-
-        # Ignore if the author is a bot
         if message.author.bot:
             return
-
-        # Check if the message contains a valid domain
         domain = message_contains(message, self.valid_domains)
         if not domain:
             return
-
         self.logger.info(
             f'{self.valid_domains[domain]} Listener caught message "{message.content}"'
         )
-
-        # React with an hourglass to indicate processing
         await message.add_reaction("⏳")
-
-        # SPECIAL CASE BECAUSE OF TWITTER AND CSAM
-        twitter_domains = {
-            "x.com",
-            "twitter.com",
-        }
-
-        # Use the VideoExtractor to download the media
-        with VideoExtractor(message.content) as video:
-            if video != None:
-                video_path = video.path()
-                if video_path != None and domain not in twitter_domains:
+        twitter_domains = {"x.com", "twitter.com"}
+        url = next((word for word in message.content.split() if "://" in word), None)
+        if not url:
+            await message.add_reaction("❌")
+            return
+        temp_file = f"/tmp/yt_{message.id}.dat"
+        async with aiohttp.ClientSession() as session:
+            try:
+                job_id = await submit_yt_dlp_job(session, url)
+                if not job_id:
+                    await message.add_reaction("❌")
+                    return
+                ok = await poll_yt_dlp_status(session, job_id)
+                if not ok:
+                    await message.add_reaction("❌")
+                    await cleanup_yt_dlp_job(session, job_id)
+                    return
+                result = await download_yt_dlp_result(session, job_id, temp_file)
+                if result and domain not in twitter_domains:
                     try:
-                        await message.reply(file=discord.File(video_path))
+                        await message.reply(file=discord.File(result))
                     except discord.errors.HTTPException:
                         await message.add_reaction("⚠️")
-                        compressed_path = video.compress_file()
-                        if compressed_path:
-                            await message.reply(
-                                "(File was compressed)",
-                                file=discord.File(compressed_path),
-                            )
-                        else:
-                            await message.add_reaction("❌")
+                        await message.reply("❌ Media too large to post.")
+                    finally:
+                        await cleanup_yt_dlp_job(session, job_id)
+                        if os.path.exists(temp_file):
+                            os.remove(temp_file)
                 else:
                     await message.add_reaction("❌")
-            else:
-                logging.warning(f"Video couldn't be extracted for {message.content}")
-                await message.add_reaction("⚠️")  # Warn about failure
-
-        # Remove the hourglass reaction after processing
+                    await cleanup_yt_dlp_job(session, job_id)
+                    if os.path.exists(temp_file):
+                        os.remove(temp_file)
+            except Exception as e:
+                self.logger.warning(f"yt-dlp API error: {e}")
+                await message.add_reaction("⚠️")
+                if os.path.exists(temp_file):
+                    os.remove(temp_file)
         await message.clear_reaction("⏳")
-
         if domain in twitter_domains:
             try:
-                # Always convert the link to fxtwitter.com
                 words = message.content.split()
                 for word in words:
                     if "://" in word:
@@ -237,32 +143,21 @@ class YTDLP(commands.Cog):
                         break
                 else:
                     alt_link = message.content
-
-                # Send alt link first
                 await message.channel.send(
                     f"Originally posted by {message.author.mention}: {alt_link}"
                 )
-
-                # Delete original message no matter what
                 await message.delete()
-
-                # If a video was extracted, reply with it
-                if video and video.path():
+                if os.path.exists(temp_file):
                     try:
-                        await message.channel.send(file=discord.File(video.path()))
+                        await message.channel.send(file=discord.File(temp_file))
                     except discord.errors.HTTPException:
-                        compressed_path = video.compress_file()
-                        if compressed_path:
-                            await message.channel.send(
-                                "(File was compressed)",
-                                file=discord.File(compressed_path),
-                            )
-                        else:
-                            await message.channel.send("❌ Media too large to post.")
+                        await message.channel.send("❌ Media too large to post.")
+                if os.path.exists(temp_file):
+                    os.remove(temp_file)
             except discord.errors.Forbidden:
-                logging.warning("Bot lacks permissions to delete messages.")
+                self.logger.warning("Bot lacks permissions to delete messages.")
             except discord.errors.NotFound:
-                logging.warning("Message was already deleted.")
+                self.logger.warning("Message was already deleted.")
 
 
 async def setup(bot):
