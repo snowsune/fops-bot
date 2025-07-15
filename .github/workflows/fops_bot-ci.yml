@@ -109,10 +109,10 @@ jobs:
             ${{ matrix.image }}:latest
             ${{ matrix.image }}:${{ env.BRANCH_TAG }}
 
-      - name: Get Docker image size
+      - name: Get Docker image size from GHCR
         id: image_size
         run: |
-          SIZE=$(docker images ${{ matrix.image }}:latest --format "{{.Size}}")
+          SIZE=$(docker buildx imagetools inspect ${{ matrix.image }}:latest | grep 'Size:' | head -n1 | awk '{print $2 $3}')
           echo "IMAGE_SIZE=$SIZE" >> $GITHUB_ENV
 
       - name: Discord notification
