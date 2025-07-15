@@ -2,7 +2,7 @@ services:
   fops_bot:
     image: fops_bot:${TAG}
     build:
-      context: .
+      context: ./fops_bot
       dockerfile: Dockerfile
     env_file:
       - .env
@@ -10,5 +10,18 @@ services:
       DEBUG: true
     volumes:
       - .local/config:/app/config
+      - yt_dlp_output:/tmp/yt_dlp_output
     restart: "no"
     command: "true"
+    
+  yt-dlp:
+    build:
+      context: ./yt_dlp_service
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    volumes:
+      - yt_dlp_output:/tmp/yt_dlp_output
+
+volumes:
+  yt_dlp_output:
