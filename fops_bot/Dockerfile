@@ -19,33 +19,29 @@ WORKDIR ${HOME}
 ENV PYTHONPATH=/app
 
 # Add any packages we need
-RUN apt update && apt install python-dev-is-python3 curl -y
+RUN apt update && apt install -y python-dev-is-python3 curl libgl1-mesa-glx libglib2.0-0 libsm6 libxext6 libxrender-dev
 
-# Copy in all requirements
-ADD requirements.txt .
+# Copy requirements, setup.py, alembic.ini, and bin to /app
+COPY README.md ./
+COPY requirements.txt ./
+COPY setup.py ./
+COPY alembic.ini ./
+COPY bin ./bin
 
-# Install normal reqs
+# Copy the fops_bot package (including alembic) to /app/fops_bot
+COPY fops_bot ./fops_bot
+
+# Add bin to PATH
+ENV PATH $PATH:/app/bin
+
+# Install requirements
 RUN pip install -r requirements.txt --no-cache-dir
 
-# Add alembic
-ADD alembic.ini .
-
-# Add /bin to path
-RUN mkdir -p ${HOME}/bin
-ENV PATH $PATH:${HOME}/bin
-
-# Copy in everything else
-ADD . ${HOME}
-
-# Get the current git version
-ARG GIT_COMMIT
-ENV GIT_COMMIT=$GIT_COMMIT
-
-# Install our app in edit mode using pip
-RUN pip install -e ${HOME} --no-cache-dir
+# Install our app as a package
+RUN pip install -e /app
 
 # Drop root and change ownership of /app to app:app
-RUN chown -R ${USER_ID}:${GROUP_ID} ${HOME}
+RUN chown -R ${USER_ID}:${GROUP_ID} /app
 USER ${USER_ID}
 
 # The `|| exit 1` isn't required but it's good practice anyway.
