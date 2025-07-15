@@ -44,6 +44,9 @@ def yt_dlp_worker(job_id, url):
             result["error"] = "yt-dlp failed or no file"
             logging.error(f"[Worker] Job {job_id} failed: yt-dlp failed or no file")
             shutil.rmtree(job_output_dir, ignore_errors=True)
+
+            # Cleanup orphans before returning
+            _cleanup_orphaned_folders()
             return result
         result["original_path"] = file_path
         logging.info(f"[Worker] Job {job_id} downloaded file: {file_path}")
@@ -72,7 +75,23 @@ def yt_dlp_worker(job_id, url):
         result["finished_at"] = time.time()
         logging.exception(f"[Worker] Job {job_id} encountered an exception:")
         shutil.rmtree(job_output_dir, ignore_errors=True)
+    _cleanup_orphaned_folders()
     return result
+
+
+def _cleanup_orphaned_folders():
+    """
+    Short function just to remove folders that dont belong to jobs anymore.
+    """
+    try:
+        active_job_ids = set(jobs.keys())
+        for folder in os.listdir(shared_output_root):
+            folder_path = os.path.join(shared_output_root, folder)
+            if os.path.isdir(folder_path) and folder not in active_job_ids:
+                shutil.rmtree(folder_path, ignore_errors=True)
+                logging.warn(f"[Cleanup] Removed orphaned job folder: {folder_path}")
+    except Exception as e:
+        logging.warning(f"[Cleanup] Exception during orphaned folder cleanup: {e}")
 
 
 executor = ThreadPoolExecutor(max_workers=MAX_WORKERS)
