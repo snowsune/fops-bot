@@ -86,5 +86,12 @@ def start_dashboard(bot, start_time=None):
     bot_instance = bot
     if start_time:
         bot_start_time = start_time
-    thread = threading.Thread(target=run_dashboard, daemon=True)
-    thread.start()
+    # TEMPORARILY DISABLED: Flask subsystem is disabled until Gunicorn hosting is set up.
+    # thread = threading.Thread(target=run_dashboard, daemon=True)
+    # thread.start()
+
+
+if __name__ == "__main__":
+    # TEMPORARILY DISABLED: Flask subsystem is disabled until Gunicorn hosting is set up.
+    # app.run(host="0.0.0.0", port=5000)
+    pass
