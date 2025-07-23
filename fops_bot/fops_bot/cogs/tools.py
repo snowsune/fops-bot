@@ -3,6 +3,7 @@ import logging
 import random
 import asyncio
 import subprocess
+import re
 from discord import app_commands
 from discord.ext import commands, tasks
 from datetime import datetime
@@ -262,49 +263,6 @@ class ToolCog(commands.Cog, name="ToolsCog"):
         set_feature_state(guild_id, "admin_ping", False)
 
         await ctx.response.send_message("Admin ping feature disabled.", ephemeral=True)
-
-    @app_commands.command(name="roll")
-    @app_commands.describe(
-        dice="The dice to roll in the format 'xdy' where x is the number of dice and y is the number of sides"
-    )
-    async def roll(self, ctx: discord.Interaction, dice: str):
-        """
-        Rolls a dice in the format 'xdy'.
-        """
-        try:
-            num, sides = map(int, dice.lower().split("d"))
-            if num <= 0 or sides <= 0:
-                raise ValueError
-        except ValueError:
-            await ctx.response.send_message(
-                "Invalid dice format. Use 'xdy' where x is the number of dice and y is the number of sides, e.g., '2d6'."
-            )
-            return
-
-        rolls = [random.randint(1, sides) for _ in range(num)]
-        total = sum(rolls)
-        await ctx.response.send_message(f"Rolls: {rolls}\nTotal: {total}")
-
-    @app_commands.command(name="sort_words")
-    @app_commands.describe(
-        message="The message whose words you want to sort by length and alphabetically."
-    )
-    async def sort_words(self, interaction: discord.Interaction, message: str):
-        """
-        Sorts all words in the provided message by length and alphabetically within each length.
-        """
-        # Split the message into words, remove punctuation, and convert to lowercase
-        words = [word.strip(".,!?;:\"'").lower() for word in message.split()]
-
-        # Sort words first alphabetically, then by length
-        sorted_words = sorted(words, key=lambda word: (len(word), word))
-
-        # Join the sorted words into a single string
-        sorted_message = " ".join(sorted_words)
-
-        await interaction.response.send_message(
-            f"Sorted words: {sorted_message}", ephemeral=True
-        )
 
 
 async def setup(bot):
