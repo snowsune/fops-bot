@@ -10,7 +10,8 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  IMAGE_FOPS: ghcr.io/snowsune/fops-bot
+  IMAGE_YTDLP: ghcr.io/snowsune/yt-dlp-service
 
 jobs:
   # test:
@@ -62,14 +63,20 @@ jobs:
       #     args: "Black formatter reported errors in {{ EVENT_PAYLOAD.pull_request.html_url }} !"
 
   build-and-publish-image:
-    name: Build and Publish Registry Image
+    name: Build and Publish Docker Images
     runs-on: ubuntu-latest
-    needs: [formatblack] # Keeps the bot from updating the image if its not tested/formatted
-
-    permissions:
-      contents: read
-      packages: write
-
+    needs: [formatblack]
+    strategy:
+      matrix:
+        include:
+          - service: fops_bot
+            context: ./fops_bot
+            image: ghcr.io/snowsune/fops-bot
+            notify_name: Fops Bot
+          - service: yt_dlp_service
+            context: ./yt_dlp_service
+            image: ghcr.io/snowsune/yt-dlp-service
+            notify_name: yt-dlp Service
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -77,49 +84,36 @@ jobs:
           fetch-depth: 0
           submodules: true
 
-      - name: Log in to the Container registry
-        uses: docker/login-action@v1
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Sanitize branch name for tag
+        id: vars
+        run: |
+          BRANCH_TAG=$(echo "${GITHUB_REF_NAME}" | tr '/' '-' | tr '[:upper:]' '[:lower:]')
+          echo "BRANCH_TAG=$BRANCH_TAG" >> $GITHUB_ENV
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata (tags, labels) for Docker
-        id: meta
-        uses: docker/metadata-action@v3
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-
-      - name: Extract Version information for fops_bot
-        id: extract_hash
-        run: |
-          echo BUILD_HASH=$(git describe --abbrev=8 --always --tags --dirty) >> $GITHUB_ENV
-
-      - name: Get branch name
-        id: branch-name
-        uses: tj-actions/branch-names@v5.2
-
-      - name: Get a docker ready tag
-        run: |
-          echo "${{ steps.branch-name.outputs.current_branch }}"
-          echo "${{ steps.meta.outputs.tags }}"
-          echo "CUSTOM_TAG=ghcr.io/snowsune/fops-bot:$(echo "${{ steps.branch-name.outputs.current_branch }}" | sed 's/[^a-zA-Z0-9]/-/g; s/[A-Z]/\L&/g')" >> $GITHUB_ENV
-
       - name: Build and push Docker image
-        uses: docker/build-push-action@v2
+        uses: docker/build-push-action@v5
         with:
-          context: .
+          context: ${{ matrix.context }}
           push: true
-          build-args: |
-            GIT_COMMIT=${{ env.BUILD_HASH }}
-            DEBUG=False
-          tags: ${{ env.CUSTOM_TAG }}
-          labels: ${{ steps.meta.outputs.labels }}
+          load: true
+          tags: |
+            ${{ matrix.image }}:latest
+            ${{ matrix.image }}:${{ env.BRANCH_TAG }}
 
       - name: Get Docker image size
         id: image_size
         run: |
-          SIZE=$(docker images ${{ env.CUSTOM_TAG }} --format "{{.Size}}")
+          SIZE=$(docker images ${{ matrix.image }}:latest --format "{{.Size}}")
           echo "IMAGE_SIZE=$SIZE" >> $GITHUB_ENV
 
       - name: Discord notification
@@ -127,4 +121,4 @@ jobs:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         uses: ncatelli/action-discord@115-add-wait-parameter-prefix
         with:
-          args: "Built and published a new Fops Bot docker image to `${{ env.CUSTOM_TAG }}`! Image size: `${{ env.IMAGE_SIZE }}`"
+          args: "Built and published a new ${{ matrix.notify_name }} docker image to `${{ matrix.image }}:latest` and `${{ matrix.image }}:${{ env.BRANCH_TAG }}`! Image size: `${{ env.IMAGE_SIZE }}`"
