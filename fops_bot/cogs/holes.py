@@ -198,7 +198,6 @@ class HolesCog(commands.Cog, name="HolesCog"):
         # --- GUILD TO HOLE RECIPIENT ---
         if message.guild:
             with get_session() as session:
-
                 hole = (
                     session.query(Hole)
                     .filter_by(channel_id=message.channel.id, guild_id=message.guild.id)

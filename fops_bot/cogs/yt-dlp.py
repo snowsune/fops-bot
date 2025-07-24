@@ -154,11 +154,9 @@ class YTDLP(commands.Cog):
                     os.remove(temp_file)
         await message.clear_reaction("⏳")
         if domain in twitter_domains:
-
             # Restrict vx/twitter reposting to only the allowed guild
             allowed_guild = 1153521286086148156
             if message.guild and message.guild.id == allowed_guild:
-
                 try:
                     words = message.content.split()
                     for word in words:
