@@ -2,7 +2,28 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 from typing import Optional
-from fops_bot.models import get_session, Hole
+from fops_bot.models import get_session, Hole, HoleUserColor
+import random
+
+COLOR_CHOICES = [
+    "Blue",
+    "Dark Blue",
+    "Navy",
+    "Teal",
+    "Aqua",
+    "Cyan",
+    "Green",
+    "Red",
+    "Yellow",
+    "Purple",
+    "Orange",
+    "Pink",
+    "Teal",
+    "Lime",
+    "Magenta",
+    "Brown",
+    "Gray",
+]
 
 
 class HolesCog(commands.Cog, name="HolesCog"):
@@ -60,9 +81,9 @@ class HolesCog(commands.Cog, name="HolesCog"):
                 .first()
             )
             if existing:
-                existing.forwarded_channel_id = forwarded_id_int
-                existing.is_pm = bool(is_pm)
-                existing.anonymize = bool(anonymize)
+                existing.forwarded_channel_id = forwarded_id_int  # type: ignore
+                existing.is_pm = bool(is_pm)  # type: ignore
+                existing.anonymize = bool(anonymize)  # type: ignore
                 session.commit()
                 await interaction.response.send_message(
                     f"Updated hole for <#{channel.id}>.", ephemeral=True
@@ -118,6 +139,34 @@ class HolesCog(commands.Cog, name="HolesCog"):
                     f"No hole found for <#{channel.id}>.", ephemeral=True
                 )
 
+    def get_name(self, anonymized: bool, user, guild_id, session):
+        if not anonymized:
+            # Easy case: just return the display name
+            return user.display_name
+
+        # Anonymized: assign or get color
+        color_entry = (
+            session.query(HoleUserColor)
+            .filter_by(guild_id=guild_id, user_id=user.id)
+            .first()
+        )
+        if not color_entry:
+            used_colors = set(
+                row.color
+                for row in session.query(HoleUserColor)
+                .filter_by(guild_id=guild_id)
+                .all()
+            )
+            available_colors = [c for c in COLOR_CHOICES if c not in used_colors]
+            if not available_colors:
+                color = random.choice(COLOR_CHOICES)
+            else:
+                color = random.choice(available_colors)
+            color_entry = HoleUserColor(guild_id=guild_id, user_id=user.id, color=color)
+            session.add(color_entry)
+            session.commit()
+        return color_entry.color
+
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
         # Ignore bot messages
@@ -134,45 +183,46 @@ class HolesCog(commands.Cog, name="HolesCog"):
                 )
                 if not hole:
                     return
-
-                # Use bool(hole.anonymize) to check value
                 if bool(hole.anonymize) and message.content.strip().startswith("("):
                     return
-
-                # Prepare content
+                bot = self.bot
+                sent = False
+                # Use get_name for display
+                display = self.get_name(
+                    bool(hole.anonymize), message.author, message.guild.id, session
+                )
                 content = message.content
                 if bool(hole.anonymize):
-                    # Remove username, just send the message
-                    content = content
+                    forward_text = f"{display}\n>>> {content}"
                 else:
-                    # Include username
-                    content = f"{message.author.display_name}: {content}"
-                # Forward to channel or user
-                bot = self.bot
+                    forward_text = f"{display}: {content}"
                 if bool(hole.is_pm):
-                    # Forward to user
                     user = bot.get_user(
                         hole.forwarded_channel_id
                     ) or await bot.fetch_user(hole.forwarded_channel_id)
                     if user:
-                        await user.send(content)
+                        await user.send(forward_text)
+                        sent = True
                 else:
-                    # Forward to channel
                     channel = bot.get_channel(
                         hole.forwarded_channel_id
                     ) or await bot.fetch_channel(hole.forwarded_channel_id)
                     if channel:
-                        await channel.send(content)
+                        await channel.send(forward_text)
+                        sent = True
+                if sent:
+                    try:
+                        await message.add_reaction("\U0001f4e7")  # 📧
+                    except Exception:
+                        pass
 
         # --- DM TO HOLE CHANNEL ---
         elif isinstance(message.channel, discord.DMChannel):
-            # Don't forward commands or messages starting with '('
             if message.content.strip().startswith(
                 "("
             ) or message.content.strip().startswith("/"):
                 return
             with get_session() as session:
-                # Find a hole where this user is the recipient (is_pm=True)
                 hole = (
                     session.query(Hole)
                     .filter_by(forwarded_channel_id=message.author.id, is_pm=True)
@@ -180,15 +230,21 @@ class HolesCog(commands.Cog, name="HolesCog"):
                 )
                 if not hole:
                     return
-                # Forward to the configured channel, keeping their display name
                 bot = self.bot
                 channel = bot.get_channel(hole.channel_id) or await bot.fetch_channel(
                     hole.channel_id
                 )
+                sent = False
                 if channel:
                     await channel.send(
                         f"{message.author.display_name}\n>>> {message.content}"
                     )
+                    sent = True
+                if sent:
+                    try:
+                        await message.add_reaction("\U0001f4e7")  # 📧
+                    except Exception:
+                        pass
 
 
 async def setup(bot):

@@ -90,6 +90,18 @@ class Hole(Base):
     anonymize = Column(Boolean, nullable=False, default=False)
 
 
+class HoleUserColor(Base):
+    __tablename__ = "hole_user_colors"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    guild_id = Column(BigInteger, nullable=False)
+    user_id = Column(BigInteger, nullable=False)
+    color = Column(String, nullable=False)
+    __table_args__ = (
+        # Ensure unique color per user per guild
+        {},
+    )
+
+
 # Database connection setup
 def get_engine():
     db_url = os.getenv("DATABASE_URL")
