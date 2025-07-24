@@ -7,7 +7,7 @@ import asyncio
 from discord.ext import commands
 from fops_bot.models import get_session, Subscription
 from datetime import datetime, timezone
-from fops_bot.cogs.subscribe_resources.filters import parse_filters
+from cogs.subscribe_resources.filters import parse_filters
 from fops_bot.scripts.Booru_Scripts import booru_utils
 
 BOORU_URL = os.getenv("BOORU_URL", "https://booru.kitsunehosting.net")

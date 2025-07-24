@@ -9,7 +9,7 @@ from discord.ext import commands, tasks
 from fops_bot.models import get_session, Subscription, KeyValueStore
 from datetime import datetime, timezone
 from requests.cookies import RequestsCookieJar
-from fops_bot.cogs.subscribe_resources.filters import parse_filters
+from cogs.subscribe_resources.filters import parse_filters
 
 FA_COOKIE_A = os.getenv("FA_COOKIE_A")
 FA_COOKIE_B = os.getenv("FA_COOKIE_B")

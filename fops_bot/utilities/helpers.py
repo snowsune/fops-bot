@@ -1,7 +1,7 @@
 import discord
 import logging
 
-from fops_bot.utilities.database import (
+from utilities.database import (
     get_feature_data,
     set_feature_state,
     is_feature_enabled,

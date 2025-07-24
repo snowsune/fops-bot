@@ -59,17 +59,20 @@ class FopsBot:
         intents.members = True
         intents.message_content = True
 
+        self.version = None
+
         # Some local memory flags
         self.dbReady = False
 
         # Create our discord bot
-        self.bot = commands.Bot(command_prefix="^", intents=intents)
+        self.version = str(os.environ.get("GIT_COMMIT"))  # Currently running version
+        self.bot = commands.Bot(command_prefix=commands.when_mentioned, intents=intents)
+        self.bot.version = self.version  # Allow cogs to access bot.version
 
         # Remove legacy help command
         self.bot.remove_command("help")
 
         # Get the build commit that the code was built with.
-        self.version = str(os.environ.get("GIT_COMMIT"))  # Currently running version
         # Find out if we're running in debug mode, or not.
         self.debug = str(os.environ.get("DEBUG", "0")).lower() in (
             "true",
@@ -83,7 +86,7 @@ class FopsBot:
         sys.path.append(self.workdir)
 
         # Append some extra information to our discord bot
-        self.bot.version = self.version  # Package version with bot
+        # self.version is available on the FopsBot instance, not the bot object
 
         # Start dashboard web server
         self.start_time = time.time()
@@ -102,13 +105,20 @@ class FopsBot:
     async def load_cogs(self):
         # Cog Loader!
         logging.info("Loading cogs...")
-        for filename in os.listdir(self.workdir + "cogs"):
-            logging.info(f"Found file {filename}, loading as extension.")
-            if filename.endswith(".py") and not filename.startswith("_"):
+
+        import importlib
+        import pkgutil
+
+        package = "cogs"
+        cogs_pkg = importlib.import_module(package)
+        cogs_dir = cogs_pkg.__path__[0]
+
+        for _, modname, ispkg in pkgutil.iter_modules([cogs_dir]):
+            if not ispkg and not modname.startswith("_"):
                 try:
-                    await self.bot.load_extension(f"cogs.{filename[:-3]}")
+                    await self.bot.load_extension(f"cogs.{modname}")
                 except Exception as e:
-                    logging.fatal(f"Error loading {filename} as a cog, error: {e}")
+                    logging.fatal(f"Error loading {modname} as a cog, error: {e}")
                     raise e
         logging.info("Done loading cogs")
 

@@ -9,3 +9,5 @@
 !alembic.ini
 !bin/
 !/fops_bot
+!/cogs
+!/utilities

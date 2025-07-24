@@ -16,8 +16,11 @@ from utilities.database import (
 
 
 def get_current_changelog(file_path) -> (int, str):
-    with open(file_path, "r") as file:
-        content = file.read()
+    try:
+        with open(file_path, "r") as file:
+            content = file.read()
+    except FileNotFoundError:
+        return 1, "No changelog found"
 
     # Regular expression to find changelog sections
     changelog_pattern = re.compile(
@@ -89,9 +92,14 @@ class Changelog(commands.Cog, name="ChangeLogCog"):
                 continue
 
             # Replace any placeholders in the changelog text
-            cur_logstr_formatted = f"# Changelog {cur_lognum}\n" + cur_logstr.replace(
-                "{{version}}", self.bot.version
-            )
+            try:
+                cur_logstr_formatted = (
+                    f"# Changelog {cur_lognum}\n"
+                    + cur_logstr.replace("{{version}}", self.bot.version)
+                )
+            except AttributeError:
+                self.logger.error("Bot version is not set, skipping changelog.")
+                return
 
             # Post the changelog
             try:

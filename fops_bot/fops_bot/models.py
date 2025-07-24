@@ -75,6 +75,21 @@ class Subscription(Base):
     )  # Last time this subscription was checked (epoch seconds)
 
 
+class Hole(Base):
+    __tablename__ = "holes"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    # Where the hole comes from
+    guild_id = Column(BigInteger, nullable=False)
+    channel_id = Column(BigInteger, nullable=False)
+
+    # Where the hole is forwarded to
+    forwarded_channel_id = Column(BigInteger, nullable=False)
+    is_pm = Column(Boolean, nullable=False, default=False)
+    anonymize = Column(Boolean, nullable=False, default=False)
+
+
 # Database connection setup
 def get_engine():
     db_url = os.getenv("DATABASE_URL")

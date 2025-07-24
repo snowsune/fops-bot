@@ -2,7 +2,28 @@
 
 Fops bot here is its own container built at this root.
 
-Vixi will prolly add more later! use docker to build this container from here.
+
+## Running Locally
+
+Its easiest to run with pipenv!
+
+```shell
+pipenv install -r requirements.txt
+pipenv run python -m fops_bot
+```
+
+Dont forget a `.env` file!
+
+## Running With docker
+
+Easiest with docker compose
+
+```shell
+docker compose up --remove-orphans
+```
+
+Dont forget a `.env` file!
+
 
 # Changelog
 
