@@ -23,6 +23,28 @@ COLOR_CHOICES = [
     "Magenta",
     "Brown",
     "Gray",
+    "Black",
+    "White",
+    "Azure",
+    "Violet",
+    "Indigo",
+    "Turquoise",
+    "Coral",
+    "Maroon",
+    "Olive",
+    "Teal",
+    "Aqua",
+    "Cyan",
+    "Green",
+    "Red",
+    "Yellow",
+    "Sunflower",
+    "Emerald",
+    "Jade",
+    "Cobalt",
+    "Plum",
+    "Lavender",
+    "Mint",
 ]
 
 
@@ -176,17 +198,24 @@ class HolesCog(commands.Cog, name="HolesCog"):
         # --- GUILD TO HOLE RECIPIENT ---
         if message.guild:
             with get_session() as session:
+
                 hole = (
                     session.query(Hole)
                     .filter_by(channel_id=message.channel.id, guild_id=message.guild.id)
                     .first()
                 )
+
                 if not hole:
+                    # This isn't a hole guild/channel pairing
                     return
+
+                # Don't forward messages starting with '('
                 if bool(hole.anonymize) and message.content.strip().startswith("("):
                     return
+
                 bot = self.bot
                 sent = False
+
                 # Use get_name for display
                 display = self.get_name(
                     bool(hole.anonymize), message.author, message.guild.id, session
