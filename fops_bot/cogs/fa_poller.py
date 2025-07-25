@@ -14,7 +14,7 @@ from cogs.subscribe_resources.filters import parse_filters
 FA_COOKIE_A = os.getenv("FA_COOKIE_A")
 FA_COOKIE_B = os.getenv("FA_COOKIE_B")
 
-SPOILER_TAGS = {"gore", "bestiality", "noncon"}
+SPOILER_TAGS = set(os.getenv("SPOILER_TAGS", "gore bestiality noncon").split())
 
 
 class FA_PollerCog(commands.Cog):

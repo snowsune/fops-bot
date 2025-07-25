@@ -14,7 +14,7 @@ BOORU_URL = os.getenv("BOORU_URL", "https://booru.kitsunehosting.net")
 BOORU_API_KEY = os.getenv("BOORU_KEY")
 BOORU_USERNAME = os.getenv("BOORU_USER")
 
-SPOILER_TAGS = {"gore", "bestiality", "noncon"}
+SPOILER_TAGS = set(os.getenv("SPOILER_TAGS", "gore bestiality noncon").split())
 
 
 class BooruPollerCog(commands.Cog):
