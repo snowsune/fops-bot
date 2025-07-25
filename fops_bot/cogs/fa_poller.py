@@ -9,7 +9,7 @@ from discord.ext import commands, tasks
 from fops_bot.models import get_session, Subscription, KeyValueStore
 from datetime import datetime, timezone
 from requests.cookies import RequestsCookieJar
-from cogs.subscribe_resources.filters import parse_filters
+from cogs.subscribe_resources.filters import parse_filters, format_spoiler_post
 
 FA_COOKIE_A = os.getenv("FA_COOKIE_A")
 FA_COOKIE_B = os.getenv("FA_COOKIE_B")
@@ -206,7 +206,6 @@ class FA_PollerCog(commands.Cog):
                         pass
                     else:
                         channel = await self.bot.fetch_channel(int(sub.channel_id))
-
                         # Optionally use xfa if channel is nsfw
                         if (
                             channel
@@ -217,20 +216,15 @@ class FA_PollerCog(commands.Cog):
                     if use_xfa:
                         url = f"https://www.xfuraffinity.net/view/{post_id}/"
 
-                    spoiler = any(tag in tags for tag in SPOILER_TAGS)
-
-                    # Check if channel is NSFW if spoiler tags are present
-                    if spoiler:
-                        channel = await self.bot.fetch_channel(int(sub.channel_id))
-                        if not (hasattr(channel, "is_nsfw") and channel.is_nsfw()):
-                            self.logger.info(
-                                f"Skipping {post_id} due to spoiler tags in non-NSFW channel."
-                            )
-                            continue
-
-                    # When posting, if spoiler is True, wrap the URL in ||spoiler||
-                    if spoiler:
-                        url = f"||{url}||"
+                    message_content, should_post = format_spoiler_post(
+                        post_id, tags, url, channel
+                    )
+                    if not should_post:
+                        self.logger.info(
+                            f"Skipping {post_id} due to spoiler tags in non-NSFW channel."
+                        )
+                        continue
+                    url = message_content
 
                     subtitle = "\n-# Run /manage_following to edit this feed."
                     msg = f"{url}{subtitle}"
