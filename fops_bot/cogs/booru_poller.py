@@ -14,6 +14,8 @@ BOORU_URL = os.getenv("BOORU_URL", "https://booru.kitsunehosting.net")
 BOORU_API_KEY = os.getenv("BOORU_KEY")
 BOORU_USERNAME = os.getenv("BOORU_USER")
 
+SPOILER_TAGS = {"gore", "bestiality", "noncon"}
+
 
 class BooruPollerCog(commands.Cog):
     def __init__(self, bot):
@@ -171,6 +173,23 @@ class BooruPollerCog(commands.Cog):
                         pass  # TODO: PM support if needed
                     else:
                         channel = await self.bot.fetch_channel(int(sub.channel_id))
+
+                    spoiler = any(tag in tags for tag in SPOILER_TAGS)
+
+                    # Check if channel is NSFW if spoiler tags are present
+                    if spoiler:
+                        channel = self.bot.get_channel(
+                            sub.channel_id
+                        ) or await self.bot.fetch_channel(sub.channel_id)
+                        if not (hasattr(channel, "is_nsfw") and channel.is_nsfw()):
+                            self.logger.info(
+                                f"Skipping {post_id} due to spoiler tags in non-NSFW channel."
+                            )
+                            continue
+
+                    # When posting, if spoiler is True, wrap the URL in ||spoiler||
+                    if spoiler:
+                        url = f"||{url}||"
 
                     subtitle = "\n-# Run /manage_following to edit this feed."
                     msg = f"{url}{subtitle}"

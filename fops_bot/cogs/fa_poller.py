@@ -14,6 +14,8 @@ from cogs.subscribe_resources.filters import parse_filters
 FA_COOKIE_A = os.getenv("FA_COOKIE_A")
 FA_COOKIE_B = os.getenv("FA_COOKIE_B")
 
+SPOILER_TAGS = {"gore", "bestiality", "noncon"}
+
 
 class FA_PollerCog(commands.Cog):
     def __init__(self, bot):
@@ -214,6 +216,21 @@ class FA_PollerCog(commands.Cog):
                             use_xfa = True
                     if use_xfa:
                         url = f"https://www.xfuraffinity.net/view/{post_id}/"
+
+                    spoiler = any(tag in tags for tag in SPOILER_TAGS)
+
+                    # Check if channel is NSFW if spoiler tags are present
+                    if spoiler:
+                        channel = await self.bot.fetch_channel(int(sub.channel_id))
+                        if not (hasattr(channel, "is_nsfw") and channel.is_nsfw()):
+                            self.logger.info(
+                                f"Skipping {post_id} due to spoiler tags in non-NSFW channel."
+                            )
+                            continue
+
+                    # When posting, if spoiler is True, wrap the URL in ||spoiler||
+                    if spoiler:
+                        url = f"||{url}||"
 
                     subtitle = "\n-# Run /manage_following to edit this feed."
                     msg = f"{url}{subtitle}"
