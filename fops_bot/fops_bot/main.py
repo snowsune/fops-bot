@@ -9,9 +9,12 @@ import logging
 import random
 import colorlog
 import time
+import threading
+import json
 
 import discordhealthcheck
-import fops_bot.web_dashboard as web_dashboard
+from flask import Flask, jsonify
+from waitress import serve
 
 import discord
 from discord import Intents, app_commands
@@ -67,7 +70,8 @@ class FopsBot:
         # Create our discord bot
         self.version = str(os.environ.get("GIT_COMMIT"))  # Currently running version
         self.bot = commands.Bot(command_prefix=commands.when_mentioned, intents=intents)
-        self.bot.version = self.version  # Allow cogs to access bot.version
+        # Store version on bot instance for cogs to access
+        setattr(self.bot, "version", self.version)
 
         # Remove legacy help command
         self.bot.remove_command("help")
@@ -88,9 +92,12 @@ class FopsBot:
         # Append some extra information to our discord bot
         # self.version is available on the FopsBot instance, not the bot object
 
-        # Start dashboard web server
+        # Dashboard is now run as a separate service with Gunicorn
+        # No need to start it here anymore
         self.start_time = time.time()
-        web_dashboard.start_dashboard(self.bot, self.start_time)
+
+        # Start API server for web service
+        self.start_api_server()
 
         # DB Setup
         try:
@@ -101,6 +108,65 @@ class FopsBot:
             self.dbReady = False
         finally:
             logging.info("Done configuring DB")
+
+    def start_api_server(self):
+        """Start a simple Flask API server for the web service"""
+        api_app = Flask(__name__)
+
+        @api_app.route("/api/stats")
+        def api_stats():
+            """API endpoint to serve bot stats to the web service"""
+            try:
+                # Gather commands and docstrings
+                commands = []
+                if hasattr(self.bot, "tree") and hasattr(self.bot.tree, "get_commands"):
+                    for c in self.bot.tree.get_commands():
+                        # Handle different command types safely
+                        try:
+                            doc = c.callback.__doc__ or ""
+                        except AttributeError:
+                            doc = getattr(c, "description", "") or ""
+                        if not doc:
+                            continue
+                        commands.append(
+                            {
+                                "name": c.name,
+                                "help": doc,
+                            }
+                        )
+                elif hasattr(self.bot, "commands"):
+                    for c in self.bot.commands:
+                        doc = getattr(c, "help", "")
+                        if not doc:
+                            continue
+                        commands.append(
+                            {
+                                "name": getattr(c, "name", str(c)),
+                                "help": doc,
+                            }
+                        )
+
+                stats = {
+                    "version": self.version,
+                    "start_time": self.start_time,
+                    "guild_count": len(getattr(self.bot, "guilds", [])),
+                    "usage_today": getattr(self.bot, "usage_today", 0),
+                    "commands": commands,
+                }
+
+                return jsonify(stats)
+            except Exception as e:
+                logging.error(f"Error serving API stats: {e}")
+                return jsonify({"error": "Failed to get stats"}), 500
+
+        def run_api():
+            # Use waitress instead of Flask's development server
+            serve(api_app, host="0.0.0.0", port=5000, threads=2)
+
+        # Start API server in a separate thread
+        api_thread = threading.Thread(target=run_api, daemon=True)
+        api_thread.start()
+        logging.info("API server started on port 5000 with waitress")
 
     async def load_cogs(self):
         # Cog Loader!
@@ -156,3 +222,8 @@ class FopsBot:
 
     def run(self):
         asyncio.run(self.start_bot())
+
+
+if __name__ == "__main__":
+    bot = FopsBot()
+    bot.run()

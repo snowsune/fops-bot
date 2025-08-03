@@ -7,6 +7,8 @@ import subprocess
 from flask import Flask, jsonify, request, send_file
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from yt_dlp_logic import run_yt_dlp, compress_file_if_needed, cleanup_files
+from threading import Thread
+from waitress import serve
 
 logging.basicConfig(
     level=logging.INFO, format="[%(asctime)s] %(levelname)s %(message)s"
@@ -213,4 +215,4 @@ def cleanup(job_id):
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    serve(app, host="0.0.0.0", port=5000, threads=2)

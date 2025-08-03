@@ -12,6 +12,7 @@ env:
   REGISTRY: ghcr.io
   IMAGE_FOPS: ghcr.io/snowsune/fops-bot
   IMAGE_YTDLP: ghcr.io/snowsune/yt-dlp-service
+  IMAGE_WEB: ghcr.io/snowsune/fops-web-service
 
 jobs:
   # test:
@@ -77,6 +78,10 @@ jobs:
             context: ./yt_dlp_service
             image: ghcr.io/snowsune/yt-dlp-service
             notify_name: yt-dlp Service
+          - service: fops_web_service
+            context: ./fops_web_service
+            image: ghcr.io/snowsune/fops-web-service
+            notify_name: Fops Web Service
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
