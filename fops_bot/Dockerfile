@@ -28,14 +28,14 @@ COPY setup.py ./
 COPY alembic.ini ./
 COPY bin ./bin
 
-# Copy the fops_bot package (including alembic) to /app/fops_bot
-COPY fops_bot ./fops_bot
-
 # Add bin to PATH
 ENV PATH $PATH:/app/bin
 
 # Install requirements
 RUN pip install -r requirements.txt --no-cache-dir
+
+# Copy the fops_bot, utilities, and cogs
+COPY . .
 
 # Install our app as a package
 RUN pip install -e /app

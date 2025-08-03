@@ -154,22 +154,25 @@ class YTDLP(commands.Cog):
                     os.remove(temp_file)
         await message.clear_reaction("⏳")
         if domain in twitter_domains:
-            try:
-                words = message.content.split()
-                for word in words:
-                    if "://" in word:
-                        alt_link = convert_twitter_link_to_alt(word.strip())
-                        break
-                else:
-                    alt_link = message.content
-                await message.channel.send(
-                    f"Originally posted by {message.author.mention}: {alt_link}"
-                )
-                await message.delete()
-            except discord.errors.Forbidden:
-                self.logger.warning("Bot lacks permissions to delete messages.")
-            except discord.errors.NotFound:
-                self.logger.warning("Message was already deleted.")
+            # Restrict vx/twitter reposting to only the allowed guild
+            allowed_guild = 1153521286086148156
+            if message.guild and message.guild.id == allowed_guild:
+                try:
+                    words = message.content.split()
+                    for word in words:
+                        if "://" in word:
+                            alt_link = convert_twitter_link_to_alt(word.strip())
+                            break
+                    else:
+                        alt_link = message.content
+                    await message.channel.send(
+                        f"Originally posted by {message.author.mention}: {alt_link}"
+                    )
+                    await message.delete()
+                except discord.errors.Forbidden:
+                    self.logger.warning("Bot lacks permissions to delete messages.")
+                except discord.errors.NotFound:
+                    self.logger.warning("Message was already deleted.")
 
 
 async def setup(bot):

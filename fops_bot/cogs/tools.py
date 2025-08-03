@@ -21,7 +21,7 @@ from utilities.database import (
     retrieve_key_number,
     get_db_info,
 )
-from fops_bot.cogs.changelog import get_current_changelog
+from cogs.changelog import get_current_changelog
 from fops_bot.models import get_session, KeyValueStore
 
 
