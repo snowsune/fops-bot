@@ -73,6 +73,16 @@ class HolesCog(commands.Cog, name="HolesCog"):
     ):
         """
         Configure a hole: messages from the specified channel will be forwarded to another channel or user.
+
+        This creates a one-way message forwarding system. Messages sent in the source channel will be
+        automatically forwarded to the destination. If anonymize is enabled, the original sender's name
+        will be replaced with a random color name to maintain privacy.
+
+        Parameters:
+        • channel: The source channel where messages will be captured
+        • forwarded_id: The destination (channel ID or user ID) to forward messages to
+        • is_pm: Set to true if forwarding to a user via DM, false for channel forwarding
+        • anonymize: Set to true to hide original sender names in forwarded messages
         """
         # Only allow admins (check only if user is a Member)
         from discord import Member
