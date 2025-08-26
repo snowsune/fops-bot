@@ -25,27 +25,22 @@ class PushpinCog(commands.Cog, name="PushpinCog"):
         if user.bot:
             return
 
-        # Get the guild (server) where the reaction was added
-        if not reaction.message.guild:
-            return  # DM reactions, ignore
-
-        guild = reaction.message.guild
-
-        # Check if the user is the server owner
-        if user.id != guild.owner_id:
+        # Check if the user is me~
+        if str(user.id) != os.getenv("OWNER_UID"):
+            logging.info(f"User {user.name} ({user.id}) is not the owner, ignoring")
             return
 
         self.logger.info(
-            f"Server owner {user.name} ({user.id}) added pushpin reaction in {guild.name}"
+            f"Server owner {user.name} ({user.id}) added pushpin reaction in {reaction.message.guild.name}"
         )
 
         # Make the API call
-        await self.send_quote_webhook(user, guild, reaction.message)
+        await self.send_quote_webhook(user, reaction.message)
 
         # Add a confirmation reaction
         await reaction.message.add_reaction("📌")
 
-    async def send_quote_webhook(self, user, guild, message):
+    async def send_quote_webhook(self, user, message):
         """
         Send the qoute to my server!
         """
