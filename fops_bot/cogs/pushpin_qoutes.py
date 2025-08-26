@@ -35,7 +35,7 @@ class PushpinCog(commands.Cog, name="PushpinCog"):
         )
 
         # Make the API call
-        await self.send_quote_webhook(user, reaction.message)
+        await self.send_quote_webhook(reaction.message.author, reaction.message)
 
         # Add a confirmation reaction
         await reaction.message.add_reaction("📌")
