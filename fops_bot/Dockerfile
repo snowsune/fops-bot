@@ -19,7 +19,7 @@ WORKDIR ${HOME}
 ENV PYTHONPATH=/app
 
 # Add any packages we need
-RUN apt update && apt install -y python-dev-is-python3 curl libgl1-mesa-glx libglib2.0-0 libsm6 libxext6 libxrender-dev
+RUN apt update && apt install -y python-dev-is-python3 curl libgl1 libglx-mesa0 libglib2.0-0 libsm6 libxext6 libxrender-dev
 
 # Copy requirements, setup.py, alembic.ini, and bin to /app
 COPY README.md ./
