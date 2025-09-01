@@ -187,9 +187,6 @@ class ToolCog(commands.Cog, name="ToolsCog"):
     @app_commands.checks.has_permissions(administrator=True)
     @app_commands.describe(state="Enable or disable NSFW commands for the guild")
     async def enable_nsfw(self, interaction: discord.Interaction, state: bool):
-        """
-        Enable or disable NSFW commands for the entire guild.
-        """
         guild_id = cast(int, interaction.guild_id)  # Cast to ensure non-None
         set_feature_state(guild_id, "enable_nsfw", state, feature_variables=None)
 
@@ -197,72 +194,6 @@ class ToolCog(commands.Cog, name="ToolsCog"):
         await interaction.response.send_message(
             f"NSFW functions have been {status} for this guild.", ephemeral=True
         )
-
-    # Just pins the admin channel
-    @app_commands.command(name="admin_ping")
-    @app_commands.checks.has_permissions(administrator=True)
-    async def admin_ping(self, ctx: discord.Interaction):
-        guild_id = cast(int, ctx.guild_id)  # Cast to ensure non-None
-
-        # Get feature data (enabled status and variables) for this guild
-        feature_data = get_feature_data(guild_id, "admin_ping")
-
-        if not feature_data or not feature_data.get("enabled"):
-            await ctx.response.send_message(
-                "Admin ping feature is not enabled.", ephemeral=True
-            )
-            return
-
-        # Parse the feature variables (e.g., channel ID) if they exist
-        admin_channel_id = feature_data.get("feature_variables")
-
-        if not admin_channel_id:
-            await ctx.response.send_message(
-                "Admin channel is not configured.", ephemeral=True
-            )
-            return
-
-        # Convert the raw channel ID to a Discord channel object
-        channel = self.bot.get_channel(int(admin_channel_id))
-        if channel:
-            await channel.send(f"Ping from {ctx.user.mention}!")
-            await ctx.response.send_message("Ping sent!", ephemeral=True)
-        else:
-            await ctx.response.send_message(
-                "Admin channel not found or accessible.", ephemeral=True
-            )
-
-    @app_commands.command(name="set_admin_ping")
-    @app_commands.checks.has_permissions(administrator=True)
-    @app_commands.describe(channel="The channel to set for admin pings")
-    async def set_admin_ping(
-        self, ctx: discord.Interaction, channel: discord.TextChannel
-    ):
-        """
-        Enables the admin ping feature and sets the channel.
-        """
-        guild_id = cast(int, ctx.guild_id)  # Cast to ensure non-None
-
-        # Enable the admin_ping feature for this guild and set the channel
-        set_feature_state(guild_id, "admin_ping", True, str(channel.id))
-
-        await ctx.response.send_message(
-            f"Admin ping feature enabled and channel set to {channel.mention}",
-            ephemeral=True,
-        )
-
-    @app_commands.command(name="disable_admin_ping")
-    @app_commands.checks.has_permissions(administrator=True)
-    async def disable_admin_ping(self, ctx: discord.Interaction):
-        """
-        Disables the admin ping feature.
-        """
-        guild_id = cast(int, ctx.guild_id)  # Cast to ensure non-None
-
-        # Disable the admin_ping feature for this guild
-        set_feature_state(guild_id, "admin_ping", False)
-
-        await ctx.response.send_message("Admin ping feature disabled.", ephemeral=True)
 
 
 async def setup(bot):

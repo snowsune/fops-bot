@@ -115,11 +115,18 @@ class DiceCog(commands.Cog, name="DiceCog"):
 
     @app_commands.command(name="roll")
     @app_commands.describe(
-        dice="The dice expression to roll, e.g. '2d6+5', '1d20/2', '2*(1d20+5)'"
+        dice="The dice expression to roll, e.g. '2d6+5', '1d20/2', '2*(1d20+5)', '3d6+1d4', '1d100-10'"
     )
     async def roll(self, ctx: discord.Interaction, dice: str):
         """
         Rolls dice using a full expression parser, supporting arithmetic, parentheses, and dice notation.
+
+        Examples:
+        - `/roll 2d6+5` - Roll 2 six-sided dice and add 5
+        - `/roll 1d20` - Roll a single twenty-sided die
+        - `/roll 3d6+1d4` - Roll 3 six-sided dice plus 1 four-sided die
+        - `/roll 2*(1d20+5)` - Roll 1d20+5, then multiply by 2
+        - `/roll 1d100-10` - Roll 1d100 and subtract 10
         """
 
         try:

@@ -13,6 +13,7 @@ from cogs.subscribe_resources.filters import parse_filters, format_spoiler_post
 
 FA_COOKIE_A = os.getenv("FA_COOKIE_A")
 FA_COOKIE_B = os.getenv("FA_COOKIE_B")
+OWNER_UID = int(os.getenv("OWNER_UID", "0"))
 
 SPOILER_TAGS = set(os.getenv("SPOILER_TAGS", "gore bestiality noncon").split())
 
@@ -22,6 +23,8 @@ class FA_PollerCog(commands.Cog):
         self.bot = bot
         self.logger = logging.getLogger(__name__)
         self._fa_poll_task = None
+        self.consecutive_failures = 0
+        self.owner_notified = False
 
     async def cog_load(self):
         self._fa_poll_task = asyncio.create_task(self.fa_poll_loop())
@@ -29,6 +32,31 @@ class FA_PollerCog(commands.Cog):
     async def cog_unload(self):
         if self._fa_poll_task:
             self._fa_poll_task.cancel()
+
+    async def notify_owner_of_failures(self):
+        """
+        Notify me when the FA poller encounters 5 consecutive failures.
+        This is to alert me that the FA cookies have expired and need to be refreshed.
+        The owner is notified via DM.
+        """
+        if not OWNER_UID or self.owner_notified:
+            return
+
+        try:
+            owner = self.bot.get_user(OWNER_UID) or await self.bot.fetch_user(OWNER_UID)
+            if owner:
+                await owner.send(
+                    f"⚠️ **FA Poller Alert** ⚠️\n"
+                    f"The FA poller has encountered {self.consecutive_failures} consecutive failures. "
+                    f"This may indicate that the FA cookies have expired and need to be refreshed.\n\n"
+                    f"Please check the bot logs and update the FA_COOKIE_A and FA_COOKIE_B environment variables."
+                )
+                self.owner_notified = True
+                self.logger.warning(
+                    f"Notified owner (ID: {OWNER_UID}) of {self.consecutive_failures} consecutive FA failures"
+                )
+        except Exception as e:
+            self.logger.error(f"Failed to notify owner of FA failures: {e}")
 
     async def fa_poll_loop(self):
         while True:
@@ -104,8 +132,23 @@ class FA_PollerCog(commands.Cog):
             self.logger.debug(f"Fetching gallery for artist '{search_criteria}'.")
             try:
                 gallery, _ = api.gallery(search_criteria, 1)
+                # Reset failure counter on successful API call
+                if self.consecutive_failures > 0:
+                    self.logger.info(
+                        f"FA API call successful, resetting failure counter from {self.consecutive_failures}"
+                    )
+                    self.consecutive_failures = 0
+                    self.owner_notified = False
             except Exception as e:
-                self.logger.warning(f"FA API error for {search_criteria}: {e}")
+                self.consecutive_failures += 1
+                self.logger.warning(
+                    f"FA API error for {search_criteria}: {e} (failure #{self.consecutive_failures})"
+                )
+
+                # Check if we should notify the owner
+                if self.consecutive_failures >= 5:
+                    await self.notify_owner_of_failures()
+
                 now = int(time.time())
                 for sub in oldest_group:
                     sub.last_ran = now
