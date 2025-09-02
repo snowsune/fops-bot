@@ -26,6 +26,18 @@ class ChannelSelectDropdown(discord.ui.Select):
                 channels = [ch for ch in category.text_channels]
             else:
                 channels = [interaction.channel]
+
+            # Filter only to channels where we have perms to send!
+            if interaction.guild and interaction.client.user:
+                bot_member = interaction.guild.get_member(interaction.client.user.id)
+
+                if bot_member:
+                    channels = [
+                        ch
+                        for ch in channels
+                        if ch.permissions_for(bot_member).send_messages
+                    ]
+
             channels = channels[:24]  # Discord limit on options
             for channel in channels:
                 options.append(
