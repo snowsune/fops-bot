@@ -6,7 +6,7 @@ import asyncio
 from typing import List, Optional, Tuple
 
 from discord.ext import commands, tasks
-from fops_bot.models import get_session, Subscription
+from fops_bot.models import get_session, Subscription, KeyValueStore
 from cogs.subscribe_resources.filters import parse_filters, format_spoiler_post
 from utilities.post_utils import Post, Posts
 
@@ -279,6 +279,16 @@ class BasePollerCog(commands.Cog):
                     )
                     self.consecutive_failures = 0
                     self.owner_notified = False
+                
+                # Update the last poll timestamp for FA
+                if self.service_type == "FurAffinity":
+                    now = int(time.time())
+                    kv = session.get(KeyValueStore, "fa_last_poll")
+                    if kv:
+                        kv.value = str(now)
+                    else:
+                        kv = KeyValueStore(key="fa_last_poll", value=str(now))
+                        session.add(kv)
             except Exception as e:
                 self.consecutive_failures += 1
                 self.logger.warning(
