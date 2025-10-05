@@ -58,12 +58,18 @@ class PawSizedCog(commands.Cog, name="PawSizedCog"):
     def parse_length_to_inches(self, length_str: str) -> float:
         """
         Parse various length formats and convert to inches.
-        Supports: 20 inches, 20", 2'3", 15cm, 4m, 4 meters, etc.
+
+        Supports: 20 inches, 20", 2'3", 15cm, 4m, 4 meters.
+
+        Ty Niku
         """
         length_str = length_str.strip().lower()
 
         # Remove any non-alphanumeric characters
-        length_str = re.sub(r"[^a-zA-Z0-9\s]", "", length_str)
+        length_str = re.sub(r"[^a-zA-Z0-9\s.]", "", length_str)
+
+        if len(length_str) > 30:
+            raise ValueError("Too long to be reasonable.")
 
         # Remove any extra whitespace and normalize
         length_str = re.sub(r"\s+", " ", length_str)
