@@ -4,12 +4,17 @@ import re
 import random
 from discord.ext import commands
 from discord import app_commands
+import pint
 
 paw_data = {
     # Everybody's paw sizes! Done in inches.
     "**Vixi** Paws": {
         "length_digigrade": 2.9,
         "length_plantigrade": 2.9,
+    },
+    "**Shaezie** Paws": {
+        "length_digigrade": 3.1,
+        "length_plantigrade": 3.1,
     },
     "**Luci** Hooves": {
         "length_digigrade": 6.0,
@@ -57,65 +62,38 @@ class PawSizedCog(commands.Cog, name="PawSizedCog"):
 
     def parse_length_to_inches(self, length_str: str) -> float:
         """
-        Parse various length formats and convert to inches.
-
-        Supports: 20 inches, 20", 2'3", 15cm, 4m, 4 meters.
-
-        Ty Niku
+        Does what the previous one did, but using Pint.
         """
-        length_str = length_str.strip().lower()
 
-        # Remove any non-alphanumeric characters
-        length_str = re.sub(r"[^a-zA-Z0-9\s.]", "", length_str)
+        try:
+            # Create a Pint unit registry
+            ureg = pint.UnitRegistry()
 
-        if len(length_str) > 30:
-            raise ValueError("Too long to be reasonable.")
+            # Clean up the input string
+            length_str = length_str.strip()
 
-        # Remove any extra whitespace and normalize
-        length_str = re.sub(r"\s+", " ", length_str)
+            # Handle exact num'num" pattern
+            feet_inches_pattern = r"(\d+(?:\.\d+)?)'(\d+(?:\.\d+)?)\""
+            feet_inches_match = re.search(feet_inches_pattern, length_str)
+            if feet_inches_match:
+                feet = float(feet_inches_match.group(1))
+                inches = float(feet_inches_match.group(2))
+                return feet * 12 + inches
 
-        # Pattern for feet and inches: 2'3", 2' 3", 2ft 3in, etc.
-        feet_inches_pattern = r"(\d+)\s*[''']?\s*(\d+)\s*[\"']?"
-        feet_inches_match = re.search(feet_inches_pattern, length_str)
-        if feet_inches_match:
-            feet = float(feet_inches_match.group(1))
-            inches = float(feet_inches_match.group(2))
-            return feet * 12 + inches
+            # Try and parse with Pint
+            try:
+                quantity = ureg.Quantity(length_str)
+                return quantity.to(ureg.inches).magnitude
+            except pint.UndefinedUnitError:
+                # If Pint can't parse it, try treating it as plain inches
+                try:
+                    number = float(length_str)
+                    return number
+                except ValueError:
+                    raise ValueError(f"Could not parse length: {length_str}")
 
-        # Pattern for just feet: 2', 2ft, 2 feet, etc.
-        feet_pattern = r"(\d+(?:\.\d+)?)\s*(?:[''']|ft|feet?)\b"
-        feet_match = re.search(feet_pattern, length_str)
-        if feet_match:
-            feet = float(feet_match.group(1))
-            return feet * 12
-
-        # Pattern for inches: 20", 20 inches, 20in, etc.
-        inches_pattern = r"(\d+(?:\.\d+)?)\s*(?:[\"']|inches?|in)\b"
-        inches_match = re.search(inches_pattern, length_str)
-        if inches_match:
-            return float(inches_match.group(1))
-
-        # Pattern for centimeters: 15cm, 15 centimeters, etc.
-        cm_pattern = r"(\d+(?:\.\d+)?)\s*(?:cm|centimeters?|centimetres?)\b"
-        cm_match = re.search(cm_pattern, length_str)
-        if cm_match:
-            cm = float(cm_match.group(1))
-            return cm / 2.54  # Convert cm to inches
-
-        # Pattern for meters: 4m, 4 meters, 4 metres, etc.
-        meters_pattern = r"(\d+(?:\.\d+)?)\s*(?:m|meters?|metres?)\b"
-        meters_match = re.search(meters_pattern, length_str)
-        if meters_match:
-            meters = float(meters_match.group(1))
-            return meters * 39.3701  # Convert meters to inches
-
-        # Pattern for just a number (assume inches if no unit)
-        number_pattern = r"(\d+(?:\.\d+)?)\s*$"
-        number_match = re.search(number_pattern, length_str)
-        if number_match:
-            return float(number_match.group(1))
-
-        raise ValueError(f"Could not parse length: {length_str}")
+        except Exception as e:
+            raise ValueError(f"Could not parse length '{length_str}': {str(e)}")
 
     def get_random_people(self, count: int = 5) -> list[str]:
         """Get a random selection of people from the paw data."""
@@ -140,6 +118,12 @@ class PawSizedCog(commands.Cog, name="PawSizedCog"):
             # Parse the length to inches
             length_inches = self.parse_length_to_inches(length)
 
+            if length_inches <= 0.5:
+                raise ValueError("Has to be a reasonable length!")
+
+            if length_inches > 63360:
+                raise ValueError("That's too big to be reasonable.")
+
             # Convert to centimeters for display
             length_cm = length_inches * 2.54
 
@@ -152,7 +136,7 @@ class PawSizedCog(commands.Cog, name="PawSizedCog"):
             for person in random_people:
                 paw_length = paw_data[person]["length_digigrade"]
                 paw_count = length_inches / paw_length
-                response_lines.append(f"`{paw_count:.1f}` {person}")
+                response_lines.append(f'`{paw_count:.1f}` {person} ({paw_length:.1f}")')
 
             response = "\n".join(response_lines)
 
