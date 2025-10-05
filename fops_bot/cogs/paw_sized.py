@@ -62,6 +62,9 @@ class PawSizedCog(commands.Cog, name="PawSizedCog"):
         """
         length_str = length_str.strip().lower()
 
+        # Remove any non-alphanumeric characters
+        length_str = re.sub(r"[^a-zA-Z0-9\s]", "", length_str)
+
         # Remove any extra whitespace and normalize
         length_str = re.sub(r"\s+", " ", length_str)
 
