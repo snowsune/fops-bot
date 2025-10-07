@@ -1,7 +1,7 @@
 import discord
 import logging
 import traceback
-
+import os
 from discord import app_commands
 from discord.ext import commands
 
@@ -37,6 +37,9 @@ class ErrorHandlerCog(commands.Cog):
         # Send error details to the admin channel
         await self.send_error_report(interaction, error)
 
+        # Re-raise to allow upstream handlers/loggers to process the exception
+        raise error
+
     @commands.Cog.listener()
     async def on_command_error(self, ctx, error):
         # Ignore certain errors
@@ -48,6 +51,9 @@ class ErrorHandlerCog(commands.Cog):
 
         # Send error details to the admin channel
         await self.send_error_report(ctx, error)
+
+        # Re-raise to allow upstream handlers/loggers to process the exception
+        raise error
 
     async def notify_user(self, interaction: discord.Interaction, error):
         """
