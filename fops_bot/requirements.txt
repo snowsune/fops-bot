@@ -12,6 +12,4 @@ sqlalchemy
 alembic
 colorlog
 faapi
-Flask>=2.0.0
-waitress>=2.0.0
 pint
