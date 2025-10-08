@@ -1,4 +1,5 @@
 import os
+import logging
 from sqlalchemy import (
     Column,
     Integer,
@@ -9,6 +10,7 @@ from sqlalchemy import (
     Text,
     ForeignKey,
     create_engine,
+    JSON,
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
@@ -26,18 +28,48 @@ class Guild(Base):
     joined_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     name = Column(String)
 
-    features = relationship("Feature", back_populates="guild")
+    # Admin flags
+    frozen = Column(Boolean, default=False, nullable=False)
 
+    # Feature flags
+    allow_nsfw = Column(Boolean, default=False, nullable=False)
+    enable_dlp = Column(Boolean, default=False, nullable=False)
 
-class Feature(Base):
-    __tablename__ = "features"
+    # Channel configurations
+    admin_channel_id = Column(BigInteger, nullable=True)
+    ignored_channels = Column(JSON, default=list, nullable=False)
 
-    guild_id = Column(BigInteger, ForeignKey("guilds.guild_id"), primary_key=True)
-    feature_name = Column(String, primary_key=True)
-    enabled = Column(Boolean)
-    feature_variables = Column(Text)
+    # Convenience methods (easy to run in cogs)
+    def is_frozen(self) -> bool:
+        """Check if the guild is frozen."""
+        logging.warning(f"Guild {self.guild_id} is frozen!")
+        return bool(self.frozen)
 
-    guild = relationship("Guild", back_populates="features")
+    def nsfw(self) -> bool:
+        """Check if NSFW content is allowed."""
+        return bool(self.allow_nsfw)
+
+    def dlp(self) -> bool:
+        """Check if DLP (download) functionality is enabled."""
+        return bool(self.enable_dlp)
+
+    def admin_channel(self) -> int | None:
+        """Get the admin channel ID."""
+        return self.admin_channel_id
+
+    def is_channel_ignored(self, ctx) -> bool:
+        """
+        Check if a channel is in the ignored list.
+        """
+
+        if not self.ignored_channels:
+            return False
+        channel_id = ctx.channel.id if hasattr(ctx, "channel") else ctx
+        return channel_id in self.ignored_channels
+
+    def get_ignored_channels(self) -> list[int]:
+        """Get list of ignored channel IDs."""
+        return list(self.ignored_channels) if self.ignored_channels else []
 
 
 class KeyValueStore(Base):
