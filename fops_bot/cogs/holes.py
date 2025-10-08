@@ -98,7 +98,8 @@ class HolesCog(commands.Cog, name="HolesCog"):
         # Validate the source channel belongs to the current guild (Should always be true but just in case)
         if interaction.guild and channel.guild.id != interaction.guild.id:
             await interaction.response.send_message(
-                "The selected source channel must be in this server.", ephemeral=True,
+                "The selected source channel must be in this server.",
+                ephemeral=True,
             )
             return
 
@@ -116,7 +117,9 @@ class HolesCog(commands.Cog, name="HolesCog"):
         # and that the bot has permission to send messages there. Bug discovered by Alex
         if not is_pm:
             try:
-                target = self.bot.get_channel(forwarded_id_int) or await self.bot.fetch_channel(forwarded_id_int)
+                target = self.bot.get_channel(
+                    forwarded_id_int
+                ) or await self.bot.fetch_channel(forwarded_id_int)
             except Exception:
                 target = None
 
@@ -131,7 +134,9 @@ class HolesCog(commands.Cog, name="HolesCog"):
             invoker_member = target.guild.get_member(interaction.user.id)
             if not invoker_member:
                 try:
-                    invoker_member = await target.guild.fetch_member(interaction.user.id)
+                    invoker_member = await target.guild.fetch_member(
+                        interaction.user.id
+                    )
                 except Exception:
                     invoker_member = None
 
@@ -143,15 +148,24 @@ class HolesCog(commands.Cog, name="HolesCog"):
                 return
 
             # Ensure the bot can send messages in the target channel
-            bot_member = target.guild.get_member(interaction.client.user.id) if interaction.client.user else None
+            bot_member = (
+                target.guild.get_member(interaction.client.user.id)
+                if interaction.client.user
+                else None
+            )
             if not bot_member:
                 try:
-                    bot_member = await target.guild.fetch_member(interaction.client.user.id) if interaction.client.user else None
+                    bot_member = (
+                        await target.guild.fetch_member(interaction.client.user.id)
+                        if interaction.client.user
+                        else None
+                    )
                 except Exception:
                     bot_member = None
             if not bot_member:
                 await interaction.response.send_message(
-                    "I am not a member of the target channel's server.", ephemeral=True,
+                    "I am not a member of the target channel's server.",
+                    ephemeral=True,
                 )
                 return
             perms = target.permissions_for(bot_member)

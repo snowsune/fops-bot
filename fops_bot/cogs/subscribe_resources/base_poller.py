@@ -279,7 +279,7 @@ class BasePollerCog(commands.Cog):
                     )
                     self.consecutive_failures = 0
                     self.owner_notified = False
-                
+
                 # Update the last poll timestamp for FA
                 if self.service_type == "FurAffinity":
                     now = int(time.time())
