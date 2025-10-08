@@ -4,6 +4,7 @@ from discord.ext import commands
 from typing import Optional
 from fops_bot.models import get_session, Hole, HoleUserColor
 import random
+import re
 
 COLOR_CHOICES = [
     "Blue",
@@ -94,15 +95,86 @@ class HolesCog(commands.Cog, name="HolesCog"):
                 )
                 return
 
-        # Validate forwarded_id
-        try:
-            forwarded_id_int = int(forwarded_id)
-        except ValueError:
+        # Validate the source channel belongs to the current guild (Should always be true but just in case)
+        if interaction.guild and channel.guild.id != interaction.guild.id:
             await interaction.response.send_message(
-                "The forwarded_id must be a valid Discord channel or user ID.",
+                "The selected source channel must be in this server.",
                 ephemeral=True,
             )
             return
+
+        # Normalize forwarded_id to digits (Can do <#123> or #123)
+        m = re.search(r"\d+", forwarded_id)
+        if not m:
+            await interaction.response.send_message(
+                "The forwarded_id must be a valid Discord channel or user ID. (Right click to get the ID)",
+                ephemeral=True,
+            )
+            return
+        forwarded_id_int = int(m.group(0))
+
+        # If forwarding to a channel, enforce that the invoker is an admin of the target channel's guild
+        # and that the bot has permission to send messages there. Bug discovered by Alex
+        if not is_pm:
+            try:
+                target = self.bot.get_channel(
+                    forwarded_id_int
+                ) or await self.bot.fetch_channel(forwarded_id_int)
+            except Exception:
+                target = None
+
+            if not isinstance(target, discord.TextChannel):
+                await interaction.response.send_message(
+                    "The forwarded_id must be a valid text channel ID when is_pm is False.",
+                    ephemeral=True,
+                )
+                return
+
+            # Ensure the invoker is a member of the target guild and is an administrator there
+            invoker_member = target.guild.get_member(interaction.user.id)
+            if not invoker_member:
+                try:
+                    invoker_member = await target.guild.fetch_member(
+                        interaction.user.id
+                    )
+                except Exception:
+                    invoker_member = None
+
+            if not invoker_member or not invoker_member.guild_permissions.administrator:
+                await interaction.response.send_message(
+                    "You must be an administrator of the target channel's server to configure this hole!",
+                    ephemeral=True,
+                )
+                return
+
+            # Ensure the bot can send messages in the target channel
+            bot_member = (
+                target.guild.get_member(interaction.client.user.id)
+                if interaction.client.user
+                else None
+            )
+            if not bot_member:
+                try:
+                    bot_member = (
+                        await target.guild.fetch_member(interaction.client.user.id)
+                        if interaction.client.user
+                        else None
+                    )
+                except Exception:
+                    bot_member = None
+            if not bot_member:
+                await interaction.response.send_message(
+                    "I am not a member of the target channel's server.",
+                    ephemeral=True,
+                )
+                return
+            perms = target.permissions_for(bot_member)
+            if not (perms.view_channel and perms.send_messages):
+                await interaction.response.send_message(
+                    "I don't have permission to send messages in the target channel.",
+                    ephemeral=True,
+                )
+                return
 
         # Store in DB
         with get_session() as session:
