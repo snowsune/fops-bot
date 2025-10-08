@@ -8,6 +8,7 @@ from typing import List, Optional, Tuple
 from discord.ext import commands, tasks
 from fops_bot.models import get_session, Subscription, KeyValueStore
 from cogs.subscribe_resources.filters import parse_filters, format_spoiler_post
+from cogs.guild_cog import get_guild
 from utilities.post_utils import Post, Posts
 
 OWNER_UID = int(os.getenv("OWNER_UID", "0"))
@@ -175,6 +176,17 @@ class BasePollerCog(commands.Cog):
         subtitle = "\n-# Run /manage_following to edit this feed."
         msg = f"{message_content}{subtitle}"
 
+        # Check if guild is pawsed!
+        if not is_pm and sub.guild_id:
+            guild_settings = get_guild(sub.guild_id)
+            if guild_settings and guild_settings.is_frozen():
+                self.logger.warning(
+                    f"Guild {sub.guild_id} is FROZEN - skipping post {post.id} to channel {sub.channel_id}"
+                )
+                # Return True to mark as "processed" so IDs get updated
+                # This prevents spam when the guild is unfrozen
+                return True
+
         # Attempt to post
         try:
             if is_pm:
@@ -204,6 +216,9 @@ class BasePollerCog(commands.Cog):
         """Main polling loop that runs continuously"""
         while True:
             interval_minutes = self.calculate_poll_interval()
+            self.logger.debug(
+                f"Polling {self.service_type} every {interval_minutes} minutes"
+            )
 
             try:
                 await self.poll_task_once()
