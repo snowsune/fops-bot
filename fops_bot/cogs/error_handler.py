@@ -13,6 +13,19 @@ class ErrorHandlerCog(commands.Cog):
         self.bot = bot
         self.bot.tree.on_error = self.on_tree_error  # Manually bind the tree error here
 
+        # If debug mode is enabled.
+        self.debug = str(os.environ.get("DEBUG", "0")).lower() in (
+            "true",
+            "1",
+            "t",
+            "yes",
+        )
+
+    async def cog_load(self):
+        if not self.debug:
+            # Remove test command from tree when loaded
+            self.__cog_app_commands__.remove(self.test_error_handler)
+
     @commands.Cog.listener()
     async def on_ready(self):
         # Sync the commands this cog provides
