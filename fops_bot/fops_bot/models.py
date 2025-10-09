@@ -11,6 +11,7 @@ from sqlalchemy import (
     ForeignKey,
     create_engine,
     JSON,
+    true,
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
@@ -32,8 +33,13 @@ class Guild(Base):
     frozen = Column(Boolean, default=False, nullable=False)
 
     # Feature flags
-    allow_nsfw = Column(Boolean, default=False, nullable=False)
-    enable_dlp = Column(Boolean, default=False, nullable=False)
+    allow_nsfw = Column(Boolean, default=False, nullable=False)  # Just for NSFW!
+    enable_dlp = Column(
+        Boolean, default=True, nullable=False
+    )  # If true, we'll enable the yt-dlp (and other download features)
+    twitter_obfuscate = Column(
+        Boolean, default=False, nullable=False
+    )  # If true, we'll enable the twitter obfuscation
 
     # Channel configurations
     admin_channel_id = Column(BigInteger, nullable=True)
@@ -52,6 +58,10 @@ class Guild(Base):
     def dlp(self) -> bool:
         """Check if DLP (download) functionality is enabled."""
         return bool(self.enable_dlp)
+
+    def obfuscate_twitter(self) -> bool:
+        """Check if Twitter links should be obfuscated (fxtwitter, etc)."""
+        return bool(self.twitter_obfuscate)
 
     def admin_channel(self) -> int | None:
         """Get the admin channel ID."""

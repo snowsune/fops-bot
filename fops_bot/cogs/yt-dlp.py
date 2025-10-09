@@ -8,6 +8,8 @@ from typing import Optional
 from discord.ext import commands
 from urllib.parse import urlparse, urlunparse
 
+from cogs.guild_cog import get_guild
+
 YTDLP_API_URL = os.environ.get("YTDLP_API_URL", "http://yt-dlp:5000")
 
 
@@ -25,9 +27,26 @@ def convert_twitter_link_to_alt(
 
 
 def message_contains(message: discord.Message, valid_domains: dict) -> Optional[str]:
-    for domain in valid_domains:
-        if domain in message.content.lower():
-            return domain
+    """Check if message contains a URL with one of the valid domains."""
+    content_lower = message.content.lower()
+
+    # Look for URLs in the message
+    for word in content_lower.split():
+        if "://" not in word:
+            continue
+
+        # Parse the URL to get the domain
+        try:
+            parsed = urlparse(word)
+            domain = parsed.netloc.lower()
+
+            # Check if this domain matches any of our valid domains
+            for valid_domain in valid_domains:
+                if domain == valid_domain or domain.endswith("." + valid_domain):
+                    return valid_domain
+        except Exception:
+            continue
+
     return None
 
 
@@ -152,12 +171,26 @@ class YTDLP(commands.Cog):
             finally:
                 if temp_file and os.path.exists(temp_file):
                     os.remove(temp_file)
-        await message.clear_reaction("⏳")
-        if domain in twitter_domains:
-            # Restrict vx/twitter reposting to only the allowed guild
-            allowed_guild = 1153521286086148156
-            if message.guild and message.guild.id == allowed_guild:
+
+        # Clear the loading reaction (requires Manage Messages permission)
+        try:
+            await message.clear_reaction("⏳")
+        except discord.errors.Forbidden:
+            # Bot lacks Manage Messages permission, just remove our own reaction
+            try:
+                await message.remove_reaction("⏳", self.bot.user)
+            except discord.errors.Forbidden:
+                self.logger.warning(
+                    f"Bot needs permissions to remove reactions in {message.guild.name}."
+                )
+                pass
+
+        # Twitter link obfuscation (fxtwitter.com reposting)
+        if domain in twitter_domains and message.guild:
+            guild_settings = get_guild(message.guild.id)
+            if guild_settings and guild_settings.obfuscate_twitter():
                 try:
+                    # Find the URL in the message and convert it
                     words = message.content.split()
                     for word in words:
                         if "://" in word:
@@ -165,14 +198,20 @@ class YTDLP(commands.Cog):
                             break
                     else:
                         alt_link = message.content
+
+                    # Repost with obfuscated link
                     await message.channel.send(
                         f"Originally posted by {message.author.mention}: {alt_link}"
                     )
                     await message.delete()
                 except discord.errors.Forbidden:
-                    self.logger.warning("Bot lacks permissions to delete messages.")
+                    self.logger.warning(
+                        f"Bot lacks permissions to delete messages in {message.guild.name}."
+                    )
                 except discord.errors.NotFound:
-                    self.logger.warning("Message was already deleted.")
+                    self.logger.warning(
+                        f"Message was already deleted in {message.guild.name}."
+                    )
 
 
 async def setup(bot):

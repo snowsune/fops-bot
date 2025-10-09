@@ -66,7 +66,8 @@ def ensure_guild_exists(guild_id: int, guild_name: str = "") -> Guild:
                 name=guild_name,
                 frozen=False,
                 allow_nsfw=False,
-                enable_dlp=False,
+                enable_dlp=True,
+                twitter_obfuscate=False,
                 admin_channel_id=None,
                 ignored_channels=[],
             )
