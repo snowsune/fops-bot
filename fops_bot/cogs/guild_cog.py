@@ -5,6 +5,7 @@ Guild settings are managed externally via https://snowsune.net/fops
 This cog handles guild tracking and synchronization with the database.
 """
 
+import os
 import discord
 import logging
 from discord.ext import commands
@@ -12,6 +13,7 @@ from fops_bot.models import get_session, Guild
 
 
 logger = logging.getLogger(__name__)
+OWNER_UID = int(os.getenv("OWNER_UID", "0"))
 
 
 def get_guild(ctx_or_guild_id) -> Guild | None:
@@ -110,6 +112,43 @@ class GuildSettingsCog(commands.Cog):
         """When the bot joins a guild, ensure it's in the database."""
         self.logger.info(f"Joined guild: {guild.name} (ID: {guild.id})")
         ensure_guild_exists(guild.id, guild.name)
+
+        # Send welcome DM to the guild owner
+        if guild.owner:
+            try:
+                welcome_message = (
+                    f"**TY for adding my bot to {guild.name}!**\n\n"
+                    f"Fops Bot is now active in your server! You can manage all settings, "
+                    f"subscriptions, and features through my web dashboard:\n\n"
+                    f"**https://snowsune.net/fops**\n\n"
+                    f"If you need help, tips or have feedback! Contact vixi@snowsune.net or PM me on discord!\n\n"
+                    f"*This message was sent because you own a server where Fops Bot was just added~*"
+                )
+                await guild.owner.send(welcome_message)
+                self.logger.info(
+                    f"Sent welcome DM to {guild.owner.name} for {guild.name}"
+                )
+            except discord.errors.Forbidden:
+                self.logger.warning(f"Could not DM {guild.owner.name} - DMs disabled")
+            except Exception as e:
+                self.logger.error(f"Error sending welcome DM: {e}")
+
+        # Hehe >:3 Notify ME about the new guild! Im nosey :P
+        if OWNER_UID:
+            try:
+                owner_user = await self.bot.fetch_user(OWNER_UID)
+                owner_notification = (
+                    f"**Bot joined a new guild!**\n\n"
+                    f"**Guild:** {guild.name}\n"
+                    f"**Guild ID:** {guild.id}\n"
+                    f"**Owner:** {guild.owner.name if guild.owner else 'Unknown'}\n"
+                    f"**Members:** {guild.member_count}\n"
+                    f"**Created:** <t:{int(guild.created_at.timestamp())}:R>"
+                )
+                await owner_user.send(owner_notification)
+                self.logger.info(f"Notified vixi about new guild: {guild.name}")
+            except Exception as e:
+                self.logger.error(f"Error notifying viix: {e}")
 
     @commands.Cog.listener()
     async def on_guild_remove(self, guild: discord.Guild):
