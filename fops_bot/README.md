@@ -183,3 +183,22 @@ Added sorting by `rating:safe` and `rating:explicit` to FA subscriptions!
 ## Changelog 20
 
 Add support for BixiBooru subscriptions~
+
+## Changelog 21
+
+Now this is a big one!
+
+I've been tinkering on Fops with the help and input of my friends! And theres a bunch
+of things to announce! A bunch of changes to present!
+
+Firstly, complex to setup functions like subscriptions are now mannaged at 
+https://snowsune.net/fops And some other functions will move there such as `/holes`. 
+This makes it a lot easier to keep track especially of large servers!
+
+You can now pause, play, enable and disable bot features, per-guild in the same new menu!
+
+Hopefully the changes I've made wont disturb anybody too much, I'll be working carefully
+to ensure most servers are migrated smoothly but if anything does go wrong, please feel
+free to reach out to me either on discord or at `vixi@snowsune.net`!
+
+Thank you!
