@@ -8,30 +8,11 @@ services:
       - .env
     environment:
       DEBUG: true
-    ports:
-      - "5001:5000"
     volumes:
       - .local/config:/app/config
       - yt_dlp_output:/tmp/yt_dlp_output
     restart: "no"
     command: "true"
-    
-  fops_web:
-    image: fops_web:${TAG}
-    build:
-      context: ./fops_web_service
-      dockerfile: Dockerfile
-    env_file:
-      - .env
-    environment:
-      BOT_API_URL: http://fops_bot:5000
-    ports:
-      - "8080:8080"
-    volumes:
-      - .local/config:/app/config
-    restart: "unless-stopped"
-    depends_on:
-      - fops_bot
     
   yt-dlp:
     build:

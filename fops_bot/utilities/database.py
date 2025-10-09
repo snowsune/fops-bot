@@ -3,65 +3,16 @@ from typing import Optional, List, Dict, Any, cast
 from sqlalchemy.orm import Session
 from sqlalchemy import select, text
 
-from fops_bot.models import Guild, Feature, KeyValueStore, get_session
-
-
-def add_guild(guild_id: int, guild_name: str) -> None:
-    """Add or update a guild in the database."""
-    with get_session() as session:
-        guild = session.get(Guild, guild_id)
-        if guild:
-            guild.name = guild_name  # type: ignore
-        else:
-            guild = Guild(guild_id=guild_id, name=guild_name)
-            session.add(guild)
-        session.commit()
-
-
-def remove_guild(guild_id: int) -> None:
-    """Remove a guild from the database."""
-    with get_session() as session:
-        guild = session.get(Guild, guild_id)
-        if guild:
-            session.delete(guild)
-            session.commit()
-
-
-def get_all_guilds() -> List[Guild]:
-    """Get all guilds from the database."""
-    with get_session() as session:
-        return list(session.scalars(select(Guild)))
-
-
-def ensure_guild_exists(session, guild_id: int, guild_name: str = ""):
-    guild = session.get(Guild, guild_id)
-    if not guild:
-        guild = Guild(guild_id=guild_id, name=guild_name)
-        session.add(guild)
-        session.commit()
+from fops_bot.models import Guild, KeyValueStore, get_session
 
 
 def is_feature_enabled(
     guild_id: int, feature_name: str, default: bool = False, guild_name: str = ""
 ) -> bool:
-    """Check if a feature is enabled for a guild."""
-    with get_session() as session:
-        ensure_guild_exists(session, guild_id, guild_name or "")
-        stmt = select(Feature).where(
-            Feature.guild_id == guild_id, Feature.feature_name == feature_name
-        )
-        feature = session.scalar(stmt)
+    """Legacy!"""
 
-        if feature is None:
-            # Create feature with default state
-            feature = Feature(
-                guild_id=guild_id, feature_name=feature_name, enabled=default
-            )
-            session.add(feature)
-            session.commit()
-            return default
-
-        return cast(bool, feature.enabled)
+    logging.warning("is_feature_enabled is deprecated. Use is_nsfw_allowed instead.")
+    return False
 
 
 def set_feature_state(
@@ -71,53 +22,26 @@ def set_feature_state(
     feature_variables: Optional[str] = None,
     guild_name: str = "",
 ) -> None:
-    """Set the state and variables for a feature in a guild."""
-    with get_session() as session:
-        ensure_guild_exists(session, guild_id, guild_name or "")
-        stmt = select(Feature).where(
-            Feature.guild_id == guild_id, Feature.feature_name == feature_name
-        )
-        feature = session.scalar(stmt)
+    """Legacy!"""
 
-        if feature:
-            feature.enabled = enabled  # type: ignore
-            if feature_variables is not None:
-                feature.feature_variables = feature_variables  # type: ignore
-        else:
-            feature = Feature(
-                guild_id=guild_id,
-                feature_name=feature_name,
-                enabled=enabled,
-                feature_variables=feature_variables,
-            )
-            session.add(feature)
-
-        session.commit()
+    logging.warning("set_feature_state is deprecated. Use set_nsfw_allowed instead.")
+    return
 
 
 def get_feature_data(guild_id: int, feature_name: str) -> Optional[Dict[str, Any]]:
-    """Get feature data for a guild."""
-    with get_session() as session:
-        stmt = select(Feature).where(
-            Feature.guild_id == guild_id, Feature.feature_name == feature_name
-        )
-        feature = session.scalar(stmt)
+    """Legacy!"""
 
-        if feature:
-            return {
-                "enabled": cast(bool, feature.enabled),
-                "feature_variables": cast(str, feature.feature_variables),
-            }
-        return None
+    logging.warning("get_feature_data is deprecated. Use get_nsfw_allowed instead.")
+    return None
 
 
 def get_guilds_with_feature_enabled(feature_name: str) -> List[int]:
-    """Get all guild IDs where a feature is enabled."""
-    with get_session() as session:
-        stmt = select(Feature.guild_id).where(
-            Feature.feature_name == feature_name, Feature.enabled == True
-        )
-        return [row[0] for row in session.execute(stmt)]
+    """Legacy!"""
+
+    logging.warning(
+        "get_guilds_with_feature_enabled is deprecated. Use get_guilds_with_nsfw_allowed instead."
+    )
+    return []
 
 
 # === KeyValueStore ===
@@ -177,26 +101,6 @@ def get_db_info() -> str:
         return str(version)
 
 
-async def is_nsfw_enabled(ctx) -> bool:
-    """
-    Check if NSFW is enabled for the guild from the context.
-    :param ctx: The context (interaction or message) to extract the guild ID.
-    :return: True if enabled, otherwise False.
-    """
-    guild_id = ctx.guild.id  # Get guild_id from context
-
-    if not ctx.channel.nsfw:
-        await ctx.response.send_message(
-            "This command only works in NSFW channels.", ephemeral=True
-        )
-        return False
-
-    if is_feature_enabled(guild_id, "enable_nsfw", default=False):
-        return True
-
-    await ctx.response.send_message(
-        "NSFW functions are disabled in this guild.", ephemeral=True
-    )
-    logging.warn(f"User {ctx.user.name} tried to use NSFW commands in a SFW guild.")
-
+async def check_nsfw_allowed(ctx) -> bool:
+    logging.warning("Use NSFW check on guild instead")
     return False

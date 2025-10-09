@@ -3,16 +3,9 @@ import os
 import logging
 import discord
 
-from discord import app_commands
-from discord.ext import commands, tasks
+from discord.ext import commands
 
-from utilities.database import (
-    retrieve_key_number,
-    store_key_number,
-    get_feature_data,
-    set_feature_state,
-    get_guilds_with_feature_enabled,
-)
+from utilities.database import retrieve_key_number, store_key_number
 
 
 def get_current_changelog(file_path) -> (int, str):
@@ -20,7 +13,12 @@ def get_current_changelog(file_path) -> (int, str):
         with open(file_path, "r") as file:
             content = file.read()
     except FileNotFoundError:
-        return 1, "No changelog found"
+        logging.warning(f"Changelog file not found: {file_path}")
+        try:
+            with open("README.md", "r") as file:  # For local!
+                content = file.read()
+        except FileNotFoundError:
+            return 1, "No changelog found"
 
     # Regular expression to find changelog sections
     changelog_pattern = re.compile(
@@ -48,11 +46,24 @@ class Changelog(commands.Cog, name="ChangeLogCog"):
 
     @commands.Cog.listener()
     async def on_ready(self):
+        """
+        Check for new changelog on bot startup and DM all guild owners.
+        """
+
+        # Log all guilds and their owners
+        self.logger.info(f"Bot is running in {len(self.bot.guilds)} guilds:")
+        for guild in self.bot.guilds:
+            owner = guild.owner
+            if owner:
+                self.logger.info(f"  - {guild.name} : {owner.name} ({owner.id})")
+            else:
+                self.logger.warning(f"  - {guild.name} : [No owner found]")
+
         self.last_log = retrieve_key_number("LAST_CHANGELOG", 0)
 
         changelog_path = "/app/README.md"
 
-        # Crack the data we need
+        # Load and parse changelog
         self.logger.info(f"Loading {changelog_path}")
         _d = get_current_changelog(changelog_path)
         cur_lognum = int(_d[0])
@@ -62,90 +73,61 @@ class Changelog(commands.Cog, name="ChangeLogCog"):
         self.logger.debug(f"Changelog content was: {cur_logstr}")
 
         if cur_lognum == self.last_log:
-            # If they match, we're done and we can pack up
             self.logger.info("No new changelog to report.")
             return
 
-        # Now we need to notify all guilds that have changelog notifications enabled
-        guilds_with_changelog_enabled = get_guilds_with_feature_enabled(
-            "changelog_alert"
-        )
+        # Format the changelog message
+        try:
+            changelog_message = (
+                f"# Fops Bot Update - Changelog {cur_lognum}\n\n"
+                + cur_logstr.replace("{{version}}", self.bot.version)
+                + f"\n\n*This message was sent to you because you own a server where Fops Bot is installed! Please direct feedback to Snowsune or vixi@snowsune.net!*"
+            )
+        except AttributeError:
+            self.logger.error("Bot version is not set, skipping changelog.")
+            return
 
-        for guild_id in guilds_with_changelog_enabled:
-            feature_data = get_feature_data(guild_id, "changelog_alert")
-            if not feature_data or not feature_data.get("enabled"):
+        # Send to all guild owners
+        sent_count = 0
+        failed_count = 0
+        owner_ids_messaged = (
+            set()
+        )  # Track unique owners (they might own multiple servers)
+
+        for guild in self.bot.guilds:
+            owner = guild.owner
+            if not owner:
+                self.logger.warning(f"Could not find owner for guild {guild.name}")
+                failed_count += 1
                 continue
 
-            # Get the channel ID for the changelog alert
-            channel_id = feature_data.get("feature_variables")
-            if not channel_id:
-                self.logger.warning(
-                    f"No channel set for changelog alerts in guild {guild_id}"
+            # Skip if we already messaged this owner
+            if owner.id in owner_ids_messaged:
+                self.logger.debug(
+                    f"Skipping {owner.name} - already sent (owns more than one server)"
                 )
                 continue
 
-            channel = self.bot.get_channel(int(channel_id))
-            if not channel:
-                self.logger.warning(
-                    f"Could not find channel {channel_id} in guild {guild_id}"
-                )
-                continue
-
-            # Replace any placeholders in the changelog text
             try:
-                cur_logstr_formatted = (
-                    f"# Changelog {cur_lognum}\n"
-                    + cur_logstr.replace("{{version}}", self.bot.version)
-                )
-            except AttributeError:
-                self.logger.error("Bot version is not set, skipping changelog.")
-                return
+                await owner.send(changelog_message)
+                owner_ids_messaged.add(owner.id)
+                sent_count += 1
+                self.logger.info(f"Sent changelog to {owner.name} ({guild.name})")
 
-            # Post the changelog
-            try:
-                await channel.send(cur_logstr_formatted)
-            except discord.errors.Forbidden as e:
+            except discord.errors.Forbidden:
                 self.logger.warning(
-                    f"When posting changelog got forbidden/lost ch. {e}. Removing from db."
+                    f"Could not DM {owner.name} - DMs disabled or blocked"
                 )
-                set_feature_state(guild_id, "changelog_alert", False)
+                failed_count += 1
+            except Exception as e:
+                self.logger.error(f"Error sending to {owner.name}: {e}")
+                failed_count += 1
 
         # Update the db after posting
         store_key_number("LAST_CHANGELOG", cur_lognum)
 
-        self.logger.info("Changelog done!")
-
-    @app_commands.command(name="set_changelog_alert_channel")
-    @app_commands.checks.has_permissions(administrator=True)
-    @app_commands.describe(channel="The channel to set for changelog alerts")
-    async def set_changelog_alert_channel(
-        self, ctx: discord.Interaction, channel: discord.TextChannel
-    ):
-        """
-        Use this command to set where changelog events should be printed!
-        """
-        guild_id = ctx.guild_id
-
-        # Enable the changelog_alert feature for this guild and set the channel
-        set_feature_state(guild_id, "changelog_alert", True, str(channel.id))
-
-        await ctx.response.send_message(
-            f"Changelog alerts have been set for {channel.mention}.", ephemeral=True
-        )
-
-    @app_commands.command(name="disable_changelog_alert_channel")
-    @app_commands.checks.has_permissions(administrator=True)
-    async def disable_changelog_alert_channel(self, ctx: discord.Interaction):
-        """
-        Disable changelog updates in a guild.
-        """
-        guild_id = ctx.guild_id
-
-        # Disable the changelog_alert feature for this guild
-        set_feature_state(guild_id, "changelog_alert", False)
-
-        await ctx.response.send_message(
-            "Changelog alerts have been disabled.", ephemeral=True
+        self.logger.info(
+            f"Changelog complete! Sent to {sent_count} owners, {failed_count} failed."
         )
 
 
