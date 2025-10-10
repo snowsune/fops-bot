@@ -33,12 +33,20 @@ class Guild(Base):
     frozen = Column(Boolean, default=False, nullable=False)
 
     # Feature flags
-    allow_nsfw = Column(Boolean, default=False, nullable=False)  # Just for NSFW!
+    allow_nsfw = Column(
+        Boolean,
+        default=False,
+        nullable=False,
+    )  # Just for NSFW!
     enable_dlp = Column(
-        Boolean, default=True, nullable=False
+        Boolean,
+        default=True,
+        nullable=False,
     )  # If true, we'll enable the yt-dlp (and other download features)
     twitter_obfuscate = Column(
-        Boolean, default=False, nullable=False
+        Boolean,
+        default=False,
+        nullable=False,
     )  # If true, we'll enable the twitter obfuscation
 
     # Channel configurations
