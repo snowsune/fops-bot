@@ -30,6 +30,6 @@ COPY . .
 EXPOSE 5000
 
 # The `|| exit 1` isn't required but it's good practice anyway.
-HEALTHCHECK CMD CURL http://localhost:5000/health || exit 1
+HEALTHCHECK CMD curl http://localhost:5000/health || exit 1
 
 CMD ["python", "app.py"]

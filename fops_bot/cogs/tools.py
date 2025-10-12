@@ -4,6 +4,8 @@ import random
 import asyncio
 import subprocess
 import re
+import os
+import aiohttp
 from discord import app_commands
 from discord.ext import commands, tasks
 from datetime import datetime
@@ -23,6 +25,8 @@ from utilities.database import (
 )
 from cogs.changelog import get_current_changelog
 from fops_bot.models import get_session, KeyValueStore
+
+YTDLP_API_URL = os.environ.get("YTDLP_API_URL", "http://yt-dlp:5000")
 
 
 class ToolCog(commands.Cog, name="ToolsCog"):
@@ -46,6 +50,7 @@ class ToolCog(commands.Cog, name="ToolsCog"):
         - The bot's version
         - The number of guilds connected
         - The number of commands run today
+        - Processing downloads (if active jobs)
         """
 
         statuses = [
@@ -53,6 +58,20 @@ class ToolCog(commands.Cog, name="ToolsCog"):
             f"Connected to {len(self.bot.guilds)} guilds",
             f"Commands run today: {self.command_counter}",
         ]
+
+        # Check for active yt-dlp jobs
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(f"{YTDLP_API_URL}/health", timeout=3) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        jobs_count = data.get("jobs", 0)
+                        if jobs_count > 0:
+                            statuses.append(
+                                f"Processing {jobs_count} download{'s' if jobs_count > 1 else ''}"
+                            )
+        except Exception:
+            self.logger.error("Failed to check yt-dlp jobs!")
 
         # Cycle through the statuses randomly
         new_status = random.choice(statuses)
@@ -90,13 +109,7 @@ class ToolCog(commands.Cog, name="ToolsCog"):
     @app_commands.command(name="version")
     async def version(self, ctx: discord.Interaction):
         """
-        Prints
-
-         - revision/version
-         - yt-dlp version
-         - Postgres version
-         - GitHub hash link
-         - and last changelog title
+        Show the bot's version, health and other information!
         """
         dbstatus = "Unknown"
         vc = None
@@ -106,11 +119,21 @@ class ToolCog(commands.Cog, name="ToolsCog"):
         github_link = "Unknown"
         fa_last_poll_str = None
 
-        # yt-dlp version
+        # yt-dlp version from service health endpoint
         try:
-            yt_dlp_version = (
-                subprocess.check_output(["yt-dlp", "--version"]).decode().strip()
-            )
+            async with aiohttp.ClientSession() as session:
+                async with session.get(f"{YTDLP_API_URL}/health", timeout=5) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        yt_dlp_version = data.get("yt-dlp_version", "Unknown")
+                        # Also grab job count for bonus info
+                        jobs_count = data.get("jobs", 0)
+                        if jobs_count > 0:
+                            yt_dlp_version += f" ({jobs_count} jobs)"
+                    else:
+                        yt_dlp_version = f"Service unavailable (HTTP {resp.status})"
+        except asyncio.TimeoutError:
+            yt_dlp_version = "Timeout (service not responding)"
         except Exception as e:
             yt_dlp_version = f"Error: {e}"
 

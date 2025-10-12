@@ -104,114 +104,160 @@ class YTDLP(commands.Cog):
             "vxtwitter.com": "Twitter",
         }
 
+    async def send_error_to_admin(self, message: discord.Message, error_msg: str):
+        """Send error message to guild's admin channel if configured."""
+        if not message.guild:
+            return
+
+        guild_settings = get_guild(message.guild.id)
+        if not guild_settings:
+            return
+
+        admin_channel_id = guild_settings.admin_channel()
+        if not admin_channel_id:
+            return
+
+        try:
+            channel = self.bot.get_channel(admin_channel_id)
+            if channel:
+                # Create a jump link to the original message
+                message_link = f"https://discord.com/channels/{message.guild.id}/{message.channel.id}/{message.id}"
+                await channel.send(
+                    f"⚠️ **yt-dlp Error**\n{error_msg}\n[Jump to message]({message_link})"
+                )
+        except Exception as e:
+            self.logger.error(f"Failed to send error to admin channel: {e}")
+
     @commands.Cog.listener("on_message")
     async def mediaListener(self, message: discord.Message):
-        # Dont listen to bots
+        # Don't listen to bots
         if message.author.bot:
             return
 
-        # Check if the message contains a domanin we can convert
+        # Only work in guilds (not DMs)
+        if not message.guild:
+            return
+
+        # Check if guild has DLP enabled
+        guild_settings = get_guild(message.guild.id)
+        if not guild_settings or not guild_settings.dlp():
+            return
+
+        # Check if the message contains a domain we can convert
         domain = message_contains(message, self.valid_domains)
         if not domain:
             return
 
         # We got one!
         self.logger.info(
-            f'{self.valid_domains[domain]} Listener caught message "{message.content}"'
+            f'{self.valid_domains[domain]} Listener caught message "{message.content}" in {message.guild.name}'
         )
-        await message.add_reaction("⏳")
 
         # Be explicit with twitter domains
         twitter_domains = {"x.com", "twitter.com"}
+
         # Walk and find the URL
         url = next((word for word in message.content.split() if "://" in word), None)
-
-        # No URL
         if not url:
-            await message.add_reaction("❌")
+            self.logger.warning("No URL found in message with valid domain")
             return
+
+        # Try to download the video
         async with aiohttp.ClientSession() as session:
             temp_file = None
             job_id = None
             try:
                 job_id = await submit_yt_dlp_job(session, url)
                 if not job_id:
-                    await message.add_reaction("❌")
+                    self.logger.warning(f"Failed to submit job for {url}")
+                    await self.send_error_to_admin(
+                        message, "Failed to submit download job"
+                    )
                     return
+
                 ok = await poll_yt_dlp_status(session, job_id)
+
                 if ok is True:
                     # Download to a temp file for Discord upload
                     with tempfile.NamedTemporaryFile(
                         delete=False, suffix=".mp4"
                     ) as tmp:
                         temp_file = tmp.name
+
                     result = await download_yt_dlp_result(session, job_id, temp_file)
                     await cleanup_yt_dlp_job(session, job_id)
+
                     if result and domain not in twitter_domains:
+                        # Successfully downloaded - reply with the video
                         try:
                             await message.reply(file=discord.File(result))
-                        except discord.errors.HTTPException:
-                            await message.add_reaction("⚠️")
-                            await message.reply("❌ Media too large to post.")
+                            self.logger.info(f"Successfully posted video for {url}")
+                        except discord.errors.HTTPException as e:
+                            self.logger.warning(f"Media too large to post: {e}")
+                            await self.send_error_to_admin(
+                                message, "Media file too large to post"
+                            )
                     else:
-                        await message.add_reaction("❌")
+                        # No result or Twitter (likely just an image post) - be silent
+                        self.logger.warning(f"No video result for {url}")
+
                 elif ok is False:
-                    await message.add_reaction("❌")
+                    # Download failed
+                    self.logger.warning(f"Download failed for {url}")
                     await cleanup_yt_dlp_job(session, job_id)
+                    # await self.send_error_to_admin(
+                    #     message, "Error downloading video from post"
+                    # )
+
                 else:  # Timed out
-                    await message.add_reaction("⏰")
-                    await message.reply("❌ Download timed out.")
+                    self.logger.warning(f"Download timed out for {url}")
                     if job_id:
                         await cleanup_yt_dlp_job(session, job_id)
+                    await self.send_error_to_admin(message, "Download timed out")
+
             except Exception as e:
                 self.logger.warning(f"yt-dlp API error: {e}")
-                await message.add_reaction("⚠️")
                 if job_id:
                     await cleanup_yt_dlp_job(session, job_id)
+                # Only send to admin if it's not a connection error (service down)
+                if "Cannot connect" not in str(e):
+                    await self.send_error_to_admin(
+                        message, f"Unexpected error: {str(e)}"
+                    )
+
             finally:
                 if temp_file and os.path.exists(temp_file):
                     os.remove(temp_file)
 
-        # Clear the loading reaction (requires Manage Messages permission)
-        try:
-            await message.clear_reaction("⏳")
-        except discord.errors.Forbidden:
-            # Bot lacks Manage Messages permission, just remove our own reaction
+        # Twitter link obfuscation (fxtwitter.com reposting)
+        if (
+            domain in twitter_domains
+            and guild_settings
+            and guild_settings.obfuscate_twitter()
+        ):
             try:
-                await message.remove_reaction("⏳", self.bot.user)
+                # Find the URL in the message and convert it
+                words = message.content.split()
+                for word in words:
+                    if "://" in word:
+                        alt_link = convert_twitter_link_to_alt(word.strip())
+                        break
+                else:
+                    alt_link = message.content
+
+                # Repost with obfuscated link
+                await message.channel.send(
+                    f"Originally posted by {message.author.mention}: {alt_link}"
+                )
+                await message.delete()
             except discord.errors.Forbidden:
                 self.logger.warning(
-                    f"Bot needs permissions to remove reactions in {message.guild.name}."
+                    f"Bot lacks permissions to delete messages in {message.guild.name}."
                 )
-                pass
-
-        # Twitter link obfuscation (fxtwitter.com reposting)
-        if domain in twitter_domains and message.guild:
-            guild_settings = get_guild(message.guild.id)
-            if guild_settings and guild_settings.obfuscate_twitter():
-                try:
-                    # Find the URL in the message and convert it
-                    words = message.content.split()
-                    for word in words:
-                        if "://" in word:
-                            alt_link = convert_twitter_link_to_alt(word.strip())
-                            break
-                    else:
-                        alt_link = message.content
-
-                    # Repost with obfuscated link
-                    await message.channel.send(
-                        f"Originally posted by {message.author.mention}: {alt_link}"
-                    )
-                    await message.delete()
-                except discord.errors.Forbidden:
-                    self.logger.warning(
-                        f"Bot lacks permissions to delete messages in {message.guild.name}."
-                    )
-                except discord.errors.NotFound:
-                    self.logger.warning(
-                        f"Message was already deleted in {message.guild.name}."
-                    )
+            except discord.errors.NotFound:
+                self.logger.warning(
+                    f"Message was already deleted in {message.guild.name}."
+                )
 
 
 async def setup(bot):
