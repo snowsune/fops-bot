@@ -173,7 +173,9 @@ class BasePollerCog(commands.Cog):
             self.logger.info(f"Skipping {post.id} due to spoiler tags")
             return False
 
-        subtitle = "\n-# Run /manage_following to edit this feed."
+        subtitle = (
+            "\n-# Visit [snowsune.net](http://snowsune.net/fops) to manage this feed."
+        )
         msg = f"{message_content}{subtitle}"
 
         # Check if guild is pawsed!

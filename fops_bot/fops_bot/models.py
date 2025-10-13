@@ -56,7 +56,6 @@ class Guild(Base):
     # Convenience methods (easy to run in cogs)
     def is_frozen(self) -> bool:
         """Check if the guild is frozen."""
-        logging.warning(f"Guild {self.guild_id} is frozen!")
         return bool(self.frozen)
 
     def nsfw(self) -> bool:
