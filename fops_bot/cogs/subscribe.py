@@ -49,7 +49,7 @@ class SubscribeCog(commands.Cog):
             title="🌐 This function is no longer used!",
             description=(
                 "Subscription management has moved to the web dashboard for a better experience!\n\n"
-                "**Visit:** https://snowsune.net/fops\n\n"
+                "**Visit:** [snowsune.net/fops](https://snowsune.net/fops/redirect/)\n\n"
                 "You can manage all your subscriptions, filters, and settings there."
             ),
             color=discord.Color.blue(),

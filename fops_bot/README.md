@@ -192,7 +192,7 @@ I've been tinkering on Fops with the help and input of my friends! And theres a 
 of things to announce! A bunch of changes to present!
 
 Firstly, complex to setup functions like subscriptions are now mannaged at 
-https://snowsune.net/fops And some other functions will move there such as `/holes`. 
+[snowsune.net/fops](https://snowsune.net/fops/redirect/) And some other functions will move there such as `/holes`. 
 This makes it a lot easier to keep track especially of large servers!
 
 You can now pause, play, enable and disable bot features, per-guild in the same new menu!

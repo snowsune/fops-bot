@@ -120,7 +120,7 @@ class GuildSettingsCog(commands.Cog):
                     f"**TY for adding my bot to {guild.name}!**\n\n"
                     f"Fops Bot is now active in your server! You can manage all settings, "
                     f"subscriptions, and features through my web dashboard:\n\n"
-                    f"**https://snowsune.net/fops**\n\n"
+                    f"**[snowsune.net/fops](https://snowsune.net/fops/redirect/)**\n\n"
                     f"If you need help, tips or have feedback! Contact vixi@snowsune.net or PM me on discord!\n\n"
                     f"*This message was sent because you own a server where Fops Bot was just added~*"
                 )
