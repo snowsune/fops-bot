@@ -53,7 +53,7 @@ class PushpinCog(commands.Cog, name="PushpinCog"):
             }
 
             response = requests.post(
-                "https://snowsune.net/quotes/webhook/",
+                "https://snowsune.net/api/quotes/webhook/",
                 json=payload,
                 headers={"Content-Type": "application/json"},
                 timeout=10,
