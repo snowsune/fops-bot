@@ -41,6 +41,14 @@ def get_current_changelog(file_path) -> (int, str):
 class Changelog(commands.Cog, name="ChangeLogCog"):
     def __init__(self, bot):
         super().__init__()
+
+        # Configure owner ID @
+        _id = os.getenv("OWNER_UID", None)
+        if _id:
+            self.owner_mention = f"<@{_id}>"
+        else:
+            self.owner_mention = "Snowsune"
+
         self.bot = bot
         self.logger = logging.getLogger(__name__)
 
@@ -81,7 +89,7 @@ class Changelog(commands.Cog, name="ChangeLogCog"):
             changelog_message = (
                 f"# Fops Bot Update - Changelog {cur_lognum}\n\n"
                 + cur_logstr.replace("{{version}}", self.bot.version)
-                + f"\n\n*This message was sent to you because you own a server where Fops Bot is installed! Please direct feedback to Snowsune or vixi@snowsune.net!*"
+                + f"\n\n*This message was sent to you because you own a server where Fops Bot is installed! Please direct feedback to {self.owner_mention} or `vixi@snowsune.net`!*"
             )
         except AttributeError:
             self.logger.error("Bot version is not set, skipping changelog.")

@@ -111,6 +111,9 @@ class ToolCog(commands.Cog, name="ToolsCog"):
         """
         Show the bot's version, health and other information!
         """
+        # Defer the response first since this takes time to gather data
+        await ctx.response.defer()
+
         dbstatus = "Unknown"
         vc = None
         yt_dlp_version = "Unknown"
@@ -204,7 +207,8 @@ class ToolCog(commands.Cog, name="ToolsCog"):
         )
         if fa_last_poll_str:
             msg += f"\n{fa_last_poll_str}"
-        await ctx.response.send_message(msg)
+        # Follow up with the collected data
+        await ctx.followup.send(msg)
 
     @app_commands.command(name="enable_nsfw")
     @app_commands.checks.has_permissions(administrator=True)
