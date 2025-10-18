@@ -190,7 +190,10 @@ class YTDLP(commands.Cog):
                     if result and domain not in twitter_domains:
                         # Successfully downloaded - reply with the video
                         try:
-                            await message.reply(file=discord.File(result))
+                            await message.reply(
+                                content=f"-# Visit [snowsune.net/fops](https://snowsune.net/fops/redirect) to edit bot settings!",
+                                file=discord.File(result),
+                            )
                             self.logger.info(f"Successfully posted video for {url}")
                         except discord.errors.HTTPException as e:
                             self.logger.warning(f"Media too large to post: {e}")
