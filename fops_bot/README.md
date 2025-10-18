@@ -202,3 +202,18 @@ to ensure most servers are migrated smoothly but if anything does go wrong, plea
 free to reach out to me either on discord or at `vixi@snowsune.net`!
 
 Thank you!
+
+
+## Changelog 22
+
+Thank you for sticking with fops bot!!
+
+Im happy to announce new e621 subscription support! YAY! It works just like my booru 
+support~ so there shouldn't be any crazy things going on ^.^
+
+Also fixed! Better compression algorithms for servers with `dlp` enabled!
+
+As always, both new features available on [snowsune.net/fops](https://snowsune.net/fops/redirect/)
+
+Tell your friends about Fops bot! And please please come to me with suggestions! I'm
+totally okay with making custom 1 off features for *your* server!
