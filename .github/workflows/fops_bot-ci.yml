@@ -101,10 +101,30 @@ jobs:
       - name: Check for changes in service directory
         id: changes
         run: |
-          # Check if files in the service directory have changed
-          if git diff --name-only HEAD~1 | grep -q "^${{ matrix.service }}/"; then
+          # For PRs, compare against the base branch
+          # For pushes, compare against the previous commit
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+            echo "Checking changes in PR against base: $BASE_SHA"
+            CHANGED_FILES=$(git diff --name-only $BASE_SHA...HEAD)
+          else
+            # For push events, check against previous commit
+            BASE_SHA="HEAD~1"
+            echo "Checking changes in push against previous commit"
+            CHANGED_FILES=$(git diff --name-only HEAD~1)
+          fi
+          
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+          
+          # Check if any files in the service directory have changed
+          if echo "$CHANGED_FILES" | grep -q "^${{ matrix.service }}/"; then
             echo "HAS_CHANGES=true" >> $GITHUB_OUTPUT
             echo "Changes detected in ${{ matrix.service }}"
+          # Also build if shared files changed (docker-compose, CI config, etc.)
+          elif echo "$CHANGED_FILES" | grep -qE "^(docker-compose\.yml|\.github/|README\.md)$"; then
+            echo "HAS_CHANGES=true" >> $GITHUB_OUTPUT
+            echo "Shared files changed, building ${{ matrix.service }}"
           else
             echo "HAS_CHANGES=false" >> $GITHUB_OUTPUT
             echo "No changes detected in ${{ matrix.service }}"
