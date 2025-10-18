@@ -91,7 +91,7 @@ def _cleanup_orphaned_folders():
             folder_path = os.path.join(shared_output_root, folder)
             if os.path.isdir(folder_path) and folder not in active_job_ids:
                 shutil.rmtree(folder_path, ignore_errors=True)
-                logging.warn(f"[Cleanup] Removed orphaned job folder: {folder_path}")
+                logging.warning(f"[Cleanup] Removed orphaned job folder: {folder_path}")
     except Exception as e:
         logging.warning(f"[Cleanup] Exception during orphaned folder cleanup: {e}")
 

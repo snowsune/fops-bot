@@ -76,11 +76,76 @@ def compress_file_if_needed(
     timeout: Optional[int] = None,
 ) -> str | None:
     """Compress the file using ffmpeg if it's too large. Returns new file path or original if not needed."""
-    if os.path.getsize(file_path) <= size_limit:
+    original_size = os.path.getsize(file_path)
+    if original_size <= size_limit:
         return file_path
-    logging.info(f"File size too large, compressing {file_path}")
+
+    logging.info(
+        f"File size too large ({original_size:,} bytes), compressing {file_path}"
+    )
     base, ext = os.path.splitext(file_path)
     compressed_file = f"{base}_compressed{ext}"
+
+    # Calculate compression ratio needed
+    compression_ratio = original_size / size_limit
+    logging.info(
+        f"Need compression ratio of {compression_ratio:.2f}x to fit {size_limit:,} bytes"
+    )
+
+    # Calculate optimal settings based on compression ratio
+    if compression_ratio <= 1.5:
+        # Light compression - just reduce bitrate slightly
+        scale_factor = 1.0
+        video_bitrate = "800k"
+        audio_bitrate = "128k"
+        framerate = "30"
+    elif compression_ratio <= 2.0:
+        # Medium compression - reduce resolution slightly
+        scale_factor = 0.8
+        video_bitrate = "600k"
+        audio_bitrate = "128k"
+        framerate = "30"
+    elif compression_ratio <= 3.0:
+        # Moderate compression
+        scale_factor = 0.6
+        video_bitrate = "500k"
+        audio_bitrate = "128k"
+        framerate = "24"
+    elif compression_ratio <= 4.0:
+        # Heavy compression
+        scale_factor = 0.5
+        video_bitrate = "400k"
+        audio_bitrate = "96k"
+        framerate = "24"
+    elif compression_ratio <= 6.0:
+        # Very heavy compression
+        scale_factor = 0.4
+        video_bitrate = "300k"
+        audio_bitrate = "96k"
+        framerate = "20"
+    elif compression_ratio <= 8.0:
+        # Extreme compression
+        scale_factor = 0.3
+        video_bitrate = "250k"
+        audio_bitrate = "64k"
+        framerate = "18"
+    else:
+        # Maximum compression for very large files
+        scale_factor = 0.25
+        video_bitrate = "200k"
+        audio_bitrate = "64k"
+        framerate = "15"
+
+    # Build scale filter
+    if scale_factor < 1.0:
+        scale_filter = f"scale=iw*{scale_factor}:ih*{scale_factor}"
+    else:
+        scale_filter = "scale=iw:ih"  # No scaling
+
+    logging.info(
+        f"Using compression: {scale_filter} @ {video_bitrate} video, {audio_bitrate} audio, {framerate}fps"
+    )
+
     try:
         subprocess.run(
             [
@@ -88,29 +153,40 @@ def compress_file_if_needed(
                 "-i",
                 file_path,
                 "-vf",
-                "scale=iw/4:ih/4",
+                scale_filter,
                 "-b:v",
-                "500k",
+                video_bitrate,
                 "-maxrate",
-                "500k",
+                video_bitrate,
                 "-bufsize",
-                "1000k",
+                f"{int(video_bitrate[:-1]) * 2}k",  # Buffer size = 2x bitrate
                 "-r",
-                "24",
+                framerate,
                 "-c:a",
                 "aac",
                 "-b:a",
-                "128k",
+                audio_bitrate,
+                "-y",  # Overwrite output file
                 compressed_file,
             ],
             check=True,
             timeout=timeout,
+            capture_output=True,
         )
-        if os.path.getsize(compressed_file) <= size_limit:
+
+        compressed_size = os.path.getsize(compressed_file)
+        logging.info(
+            f"Compression result: {original_size:,} → {compressed_size:,} bytes ({compressed_size/size_limit:.2f}x limit)"
+        )
+
+        if compressed_size <= size_limit:
             return compressed_file
         else:
-            logging.error("Compressed file is still too large.")
+            logging.error(
+                f"Compressed file still too large: {compressed_size:,} bytes (limit: {size_limit:,})"
+            )
             return None
+
     except subprocess.TimeoutExpired:
         logging.error(f"ffmpeg compression timed out after {timeout} seconds")
         return None
