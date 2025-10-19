@@ -9,6 +9,7 @@ from discord.ext import commands
 from urllib.parse import urlparse, urlunparse
 
 from cogs.guild_cog import get_guild
+from utilities.influx_metrics import send_metric
 
 YTDLP_API_URL = os.environ.get("YTDLP_API_URL", "http://yt-dlp:5000")
 
@@ -175,6 +176,11 @@ class YTDLP(commands.Cog):
                     )
                     return
 
+                # Track job submission in InfluxDB
+                from utilities.influx_metrics import send_metric
+
+                send_metric("ytdlp_job_submitted", message.guild.id, message.guild.name)
+
                 ok = await poll_yt_dlp_status(session, job_id)
 
                 if ok is True:
@@ -195,6 +201,16 @@ class YTDLP(commands.Cog):
                                 file=discord.File(result),
                             )
                             self.logger.info(f"Successfully posted video for {url}")
+
+                            # Send metrics to InfluxDB
+                            send_metric(
+                                "video_downloads", message.guild.id, message.guild.name
+                            )
+                            send_metric(
+                                "ytdlp_job_completed",
+                                message.guild.id,
+                                message.guild.name,
+                            )
                         except discord.errors.HTTPException as e:
                             self.logger.warning(f"Media too large to post: {e}")
                             await self.send_error_to_admin(
@@ -208,6 +224,11 @@ class YTDLP(commands.Cog):
                     # Download failed
                     self.logger.warning(f"Download failed for {url}")
                     await cleanup_yt_dlp_job(session, job_id)
+
+                    # Track job failure in InfluxDB
+                    send_metric(
+                        "ytdlp_job_failed", message.guild.id, message.guild.name
+                    )
                     # await self.send_error_to_admin(
                     #     message, "Error downloading video from post"
                     # )
@@ -216,12 +237,20 @@ class YTDLP(commands.Cog):
                     self.logger.warning(f"Download timed out for {url}")
                     if job_id:
                         await cleanup_yt_dlp_job(session, job_id)
+
+                    # Track job timeout in InfluxDB
+                    send_metric(
+                        "ytdlp_job_timeout", message.guild.id, message.guild.name
+                    )
                     await self.send_error_to_admin(message, "Download timed out")
 
             except Exception as e:
                 self.logger.warning(f"yt-dlp API error: {e}")
                 if job_id:
                     await cleanup_yt_dlp_job(session, job_id)
+
+                # Track job error in InfluxDB
+                send_metric("ytdlp_job_error", message.guild.id, message.guild.name)
                 # Only send to admin if it's not a connection error (service down)
                 if "Cannot connect" not in str(e):
                     await self.send_error_to_admin(

@@ -8,13 +8,6 @@ from typing import Optional, List
 from requests.cookies import RequestsCookieJar
 from datetime import datetime, timezone
 from fops_bot.models import get_session, Subscription
-from .subscribe_resources.ui import (
-    AddSubscriptionModal,
-    ServiceDropdown,
-    ChannelSelectDropdown,
-    RemoveDropdown,
-    ManageFollowingView,
-)
 
 # Load FurAffinity cookies from environment variables
 FA_COOKIE_A = os.getenv("FA_COOKIE_A")

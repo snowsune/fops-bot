@@ -11,6 +11,8 @@ from discord.ext import commands, tasks
 from datetime import datetime
 from typing import Optional, cast
 
+from utilities.influx_metrics import send_metric
+
 from utilities.common import seconds_until
 from utilities.database import (
     store_key,
@@ -86,6 +88,12 @@ class ToolCog(commands.Cog, name="ToolsCog"):
         """
         self.command_counter += 1
         self.bot.usage_today = self.command_counter
+
+        # Track command usage in InfluxDB
+        if ctx.guild:
+            send_metric(
+                "command_usage", ctx.guild.id, ctx.guild.name, command_name=cmd.name
+            )
 
     @tasks.loop(seconds=1)
     async def reset_counter_task(self):

@@ -5,7 +5,7 @@ from discord.ext import commands
 import asyncio
 import logging
 
-OWNER_UID = int(os.getenv("OWNER_UID"))
+OWNER_UID = int(os.getenv("OWNER_UID", "0"))
 
 
 class VixiThinks(commands.Cog):

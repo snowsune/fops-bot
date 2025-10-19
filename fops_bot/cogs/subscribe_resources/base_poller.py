@@ -11,6 +11,8 @@ from cogs.subscribe_resources.filters import parse_filters, format_spoiler_post
 from cogs.guild_cog import get_guild
 from utilities.post_utils import Post, Posts
 
+from utilities.influx_metrics import send_metric
+
 OWNER_UID = int(os.getenv("OWNER_UID", "0"))
 SPOILER_TAGS = set(os.getenv("SPOILER_TAGS", "gore bestiality noncon").split())
 
@@ -374,6 +376,14 @@ class BasePollerCog(commands.Cog):
                             last_successful_post = post
                             self.logger.info(
                                 f"Successfully processed {post.id} for sub {sub.id}"
+                            )
+
+                            # Track automatic post in InfluxDB
+                            send_metric(
+                                "auto_post",
+                                sub.guild_id or 0,
+                                sub_id=str(sub.id),
+                                post_id=str(post.id),
                             )
                         else:
                             self.logger.warning(

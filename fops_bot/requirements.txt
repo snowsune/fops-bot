@@ -13,3 +13,4 @@ alembic
 colorlog
 faapi
 pint
+influxdb-client

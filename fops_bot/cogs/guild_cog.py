@@ -107,11 +107,22 @@ class GuildSettingsCog(commands.Cog):
             synced_count += 1
         self.logger.info(f"Synced {synced_count} guilds to database.")
 
+        # Track guild count in InfluxDB
+        from utilities.influx_metrics import send_metric
+
+        send_metric("guild_count", guild_id=0, count=len(self.bot.guilds))
+
     @commands.Cog.listener()
     async def on_guild_join(self, guild: discord.Guild):
         """When the bot joins a guild, ensure it's in the database."""
         self.logger.info(f"Joined guild: {guild.name} (ID: {guild.id})")
         ensure_guild_exists(guild.id, guild.name)
+
+        # Track guild join and updated count in InfluxDB
+        from utilities.influx_metrics import send_metric
+
+        send_metric("guild_join", guild.id, guild_name=guild.name)
+        send_metric("guild_count", guild_id=0, count=len(self.bot.guilds))
 
         # Send welcome DM to the guild owner
         if guild.owner:
@@ -154,6 +165,12 @@ class GuildSettingsCog(commands.Cog):
     async def on_guild_remove(self, guild: discord.Guild):
         """Log when the bot leaves a guild (but keep the data)."""
         self.logger.info(f"Left guild: {guild.name} (ID: {guild.id})")
+
+        # Track guild leave and updated count in InfluxDB
+        from utilities.influx_metrics import send_metric
+
+        send_metric("guild_leave", guild.id, guild_name=guild.name)
+        send_metric("guild_count", guild_id=0, count=len(self.bot.guilds))
 
     @commands.Cog.listener()
     async def on_guild_update(self, before: discord.Guild, after: discord.Guild):
