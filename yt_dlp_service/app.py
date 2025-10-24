@@ -4,34 +4,36 @@ import os
 import shutil
 import logging
 import subprocess
-from flask import Flask, jsonify, request, send_file
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import json
+import signal
+import sys
+from concurrent.futures import ThreadPoolExecutor
 from yt_dlp_logic import run_yt_dlp, compress_file_if_needed, cleanup_files
 from threading import Thread
-from waitress import serve
+from utilities.redis_client import redis_client
 
 logging.basicConfig(
     level=logging.INFO, format="[%(asctime)s] %(levelname)s %(message)s"
 )
 
-app = Flask(__name__)
-
 jobs = {}
-jobs_lock = (
-    None  # Not needed for ThreadPoolExecutor, but keep for status/result/cleanup
-)
 shared_output_root = "/tmp/yt_dlp_output"
 os.makedirs(shared_output_root, exist_ok=True)
 
-MAX_JOB_SECONDS = 600  # 10 minutes per job
-MAX_WORKERS = 4  # Number of parallel jobs
+MAX_JOB_SECONDS = 600
+MAX_WORKERS = 4
+YTDLP_JOB_CHANNEL = "ytdlp:jobs"
+YTDLP_STATUS_CHANNEL = "ytdlp:status"
+shutdown_flag = False
 
 
 def yt_dlp_worker(job_id, url):
     job_output_dir = os.path.join(shared_output_root, job_id)
     os.makedirs(job_output_dir, exist_ok=True)
     logging.info(f"[Worker] Starting job {job_id} for URL: {url}")
-    result = {
+
+    # Update status in Redis
+    status_data = {
         "status": "running",
         "started_at": time.time(),
         "url": url,
@@ -39,180 +41,154 @@ def yt_dlp_worker(job_id, url):
         "original_path": None,
         "error": None,
     }
+    redis_client.set_job_status(job_id, status_data)
+    redis_client.publish_job(
+        YTDLP_STATUS_CHANNEL, {"job_id": job_id, "status": "running"}
+    )
+
     try:
         file_path = run_yt_dlp(url, job_output_dir, job_id, timeout=MAX_JOB_SECONDS)
         if not file_path:
-            result["status"] = "failed"
-            result["error"] = "yt-dlp failed or no file"
+            status_data["status"] = "failed"
+            status_data["error"] = "yt-dlp failed or no file"
+            redis_client.set_job_status(job_id, status_data)
+            redis_client.publish_job(
+                YTDLP_STATUS_CHANNEL, {"job_id": job_id, "status": "failed"}
+            )
             logging.error(f"[Worker] Job {job_id} failed: yt-dlp failed or no file")
             shutil.rmtree(job_output_dir, ignore_errors=True)
 
-            # Cleanup orphans before returning
-            _cleanup_orphaned_folders()
-            return result
-        result["original_path"] = file_path
+            return status_data
+
+        status_data["original_path"] = file_path
         logging.info(f"[Worker] Job {job_id} downloaded file: {file_path}")
         result_path = compress_file_if_needed(file_path, timeout=MAX_JOB_SECONDS)
-        result["result_path"] = result_path
+        status_data["result_path"] = result_path
+
         if result_path:
-            result["status"] = "done"
-            result["finished_at"] = time.time()
+            status_data["status"] = "done"
+            status_data["finished_at"] = time.time()
+            redis_client.set_job_status(job_id, status_data)
+            redis_client.publish_job(
+                YTDLP_STATUS_CHANNEL, {"job_id": job_id, "status": "done"}
+            )
             logging.info(f"[Worker] Job {job_id} completed. Result file: {result_path}")
         else:
-            result["status"] = "failed"
-            result["error"] = "Compression failed or file too large"
-            result["finished_at"] = time.time()
+            status_data["status"] = "failed"
+            status_data["error"] = "Compression failed or file too large"
+            status_data["finished_at"] = time.time()
+            redis_client.set_job_status(job_id, status_data)
+            redis_client.publish_job(
+                YTDLP_STATUS_CHANNEL, {"job_id": job_id, "status": "failed"}
+            )
             logging.error(
                 f"[Worker] Job {job_id} failed: Compression failed or file too large"
             )
+
         # Clean up all files in the job directory except the result file
         for f in os.listdir(job_output_dir):
             fpath = os.path.join(job_output_dir, f)
             if fpath != result_path:
                 os.remove(fpath)
                 logging.info(f"[Worker] Job {job_id} cleaned up file: {fpath}")
+
     except Exception as e:
-        result["status"] = "failed"
-        result["error"] = str(e)
-        result["finished_at"] = time.time()
+        status_data["status"] = "failed"
+        status_data["error"] = str(e)
+        status_data["finished_at"] = time.time()
+        redis_client.set_job_status(job_id, status_data)
+        redis_client.publish_job(
+            YTDLP_STATUS_CHANNEL, {"job_id": job_id, "status": "failed"}
+        )
         logging.exception(f"[Worker] Job {job_id} encountered an exception:")
         shutil.rmtree(job_output_dir, ignore_errors=True)
-    _cleanup_orphaned_folders()
-    return result
+
+    return status_data
 
 
-def _cleanup_orphaned_folders():
-    """
-    Short function just to remove folders that dont belong to jobs anymore.
-    """
+def redis_job_processor():
+    """Process jobs from Redis queue"""
+    pubsub = redis_client.subscribe_to_channel(YTDLP_JOB_CHANNEL)
+    if not pubsub:
+        logging.error("Failed to subscribe to Redis job channel")
+        return
+
+    logging.info("Started Redis job processor")
+    executor = ThreadPoolExecutor(max_workers=MAX_WORKERS)
+
     try:
-        active_job_ids = set(jobs.keys())
-        for folder in os.listdir(shared_output_root):
-            folder_path = os.path.join(shared_output_root, folder)
-            if os.path.isdir(folder_path) and folder not in active_job_ids:
-                shutil.rmtree(folder_path, ignore_errors=True)
-                logging.warning(f"[Cleanup] Removed orphaned job folder: {folder_path}")
+        for message in pubsub.listen():
+            if shutdown_flag:
+                break
+
+            if message["type"] == "message":
+                try:
+                    job_data = json.loads(message["data"])
+                    job_id = job_data.get("job_id")
+                    url = job_data.get("url")
+
+                    if not job_id or not url:
+                        logging.error(f"Invalid job data received: {job_data}")
+                        continue
+
+                    logging.info(f"[Redis] Processing job {job_id} for URL: {url}")
+                    executor.submit(yt_dlp_worker, job_id, url)
+
+                except json.JSONDecodeError as e:
+                    logging.error(f"Failed to parse job message: {e}")
+                except Exception as e:
+                    logging.error(f"Error processing job: {e}")
+
     except Exception as e:
-        logging.warning(f"[Cleanup] Exception during orphaned folder cleanup: {e}")
+        logging.error(f"Redis job processor error: {e}")
+    finally:
+        pubsub.close()
+        executor.shutdown()
+        logging.info("Redis job processor stopped")
 
 
-executor = ThreadPoolExecutor(max_workers=MAX_WORKERS)
-
-
-@app.route("/health", methods=["GET"])
-def health():
-    ytdlp_version = None
-    try:
-        ytdlp_version = (
-            subprocess.check_output(["yt-dlp", "--version"]).decode().strip()
-        )
-    except Exception as e:
-        ytdlp_version = str(e)
-    job_count = len(jobs)
-    job_ids = list(jobs.keys())
-    return (
-        jsonify(
-            {
+def update_health_status():
+    """Update service health status in Redis"""
+    while not shutdown_flag:
+        try:
+            ytdlp_version = (
+                subprocess.check_output(["yt-dlp", "--version"]).decode().strip()
+            )
+            health_data = {
                 "status": "ok",
                 "yt-dlp_version": ytdlp_version,
-                "jobs": job_count,
-                "job_ids": job_ids,
+                "jobs": len(jobs),
+                "timestamp": time.time(),
             }
-        ),
-        200,
-    )
+            redis_client.set_service_health("ytdlp", health_data)
+            time.sleep(30)
+        except Exception as e:
+            logging.error(f"Health status update error: {e}")
+            time.sleep(30)
 
 
-@app.route("/submit", methods=["POST"])
-def submit():
-    data = request.get_json()
-    url = data.get("url")
-    if not url:
-        return jsonify({"error": "Missing url"}), 400
-    job_id = str(uuid.uuid4())
-    # Submit the job to the executor
-    future = executor.submit(yt_dlp_worker, job_id, url)
-    jobs[job_id] = {
-        "status": "queued",
-        "url": url,
-        "future": future,
-        "created_at": time.time(),
-        "result_path": None,
-        "original_path": None,
-        "error": None,
-    }
-    logging.info(f"[Submit] New job submitted: {job_id} for URL: {url}")
-    return jsonify({"job_id": job_id}), 200
-
-
-@app.route("/status/<job_id>", methods=["GET"])
-def status(job_id):
-    job = jobs.get(job_id)
-    if not job:
-        return jsonify({"error": "Job not found"}), 404
-    future = job.get("future")
-    if future is not None:
-        if future.done():
-            result = future.result()
-            # Update job dict with result
-            job.update(result)
-        else:
-            job["status"] = "running"
-    logging.info(f"[Status] Job {job_id} status requested.")
-    return jsonify({"status": job["status"], "error": job.get("error")}), 200
-
-
-@app.route("/result/<job_id>", methods=["GET"])
-def result(job_id):
-    job = jobs.get(job_id)
-    if not job:
-        return jsonify({"error": "Job not found"}), 404
-    future = job.get("future")
-    if future is not None and future.done():
-        result = future.result()
-        job.update(result)
-    if job["status"] != "done" or not job["result_path"]:
-        return jsonify({"error": "Job not complete"}), 400
-    result_path = job["result_path"]
-    logging.info(f"[Result] Job {job_id} result requested.")
-    try:
-        return send_file(result_path, as_attachment=True)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route("/cleanup/<job_id>", methods=["POST"])
-def cleanup(job_id):
-    job = jobs.get(job_id)
-    if not job:
-        logging.info(f"[Cleanup] Job {job_id} not found for cleanup.")
-        return jsonify({"error": "Job not found"}), 404
-    future = job.get("future")
-    if future is not None and future.done():
-        result = future.result()
-        job.update(result)
-    if job["status"] not in ("done", "failed"):
-        return jsonify({"error": "Job not done or failed yet"}), 400
-    result_path = job.get("result_path")
-    job_output_dir = os.path.dirname(result_path) if result_path else None
-    try:
-        if result_path and os.path.isfile(result_path):
-            os.remove(result_path)
-            logging.info(
-                f"[Cleanup] Deleted result file for job {job_id}: {result_path}"
-            )
-        if job_output_dir and os.path.isdir(job_output_dir):
-            shutil.rmtree(job_output_dir, ignore_errors=True)
-            logging.info(
-                f"[Cleanup] Deleted job directory for job {job_id}: {job_output_dir}"
-            )
-        jobs.pop(job_id, None)
-        logging.info(f"[Cleanup] Removed job metadata for job {job_id}")
-        return jsonify({"status": "cleaned"}), 200
-    except Exception as e:
-        logging.exception(f"[Cleanup] Exception while cleaning up job {job_id}:")
-        return jsonify({"error": str(e)}), 500
+def signal_handler(signum, frame):
+    global shutdown_flag
+    logging.info("Received shutdown signal, stopping gracefully...")
+    shutdown_flag = True
 
 
 if __name__ == "__main__":
-    serve(app, host="0.0.0.0", port=5000, threads=2)
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+
+    if not redis_client.test_connection():
+        logging.error("Failed to connect to Redis, exiting")
+        sys.exit(1)
+
+    Thread(target=redis_job_processor, daemon=True).start()
+    Thread(target=update_health_status, daemon=True).start()
+
+    logging.info("yt-dlp service started with Redis support")
+
+    # Keep main thread alive
+    try:
+        while not shutdown_flag:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        pass

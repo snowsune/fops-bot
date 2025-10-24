@@ -1,4 +1,13 @@
 services:
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+
   fops_bot:
     image: fops_bot:${TAG}
     build:
@@ -8,20 +17,30 @@ services:
       - .env
     environment:
       DEBUG: true
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
     volumes:
       - .local/config:/app/config
       - yt_dlp_output:/tmp/yt_dlp_output
     restart: "no"
     command: "true"
+    depends_on:
+      - redis
     
   yt-dlp:
     build:
       context: ./yt_dlp_service
       dockerfile: Dockerfile
-    ports:
-      - "5000:5000"
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
     volumes:
       - yt_dlp_output:/tmp/yt_dlp_output
+    depends_on:
+      - redis
 
 volumes:
   yt_dlp_output:
+  redis_data:

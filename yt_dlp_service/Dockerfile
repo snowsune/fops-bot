@@ -27,9 +27,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy in all else
 COPY . .
 
-EXPOSE 5000
-
-# The `|| exit 1` isn't required but it's good practice anyway.
-HEALTHCHECK CMD curl http://localhost:5000/health || exit 1
+# Health check via Redis connection
+HEALTHCHECK CMD python -c "from utilities.redis_client import redis_client; exit(0 if redis_client.test_connection() else 1)"
 
 CMD ["python", "app.py"]
