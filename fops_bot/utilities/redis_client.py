@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 
 class RedisClient:
-    """Redis client wrapper for internal service communication"""
+    """Simplified Redis client for yt-dlp service communication"""
 
     def __init__(self):
         self.host = os.environ.get("REDIS_HOST", "redis")
@@ -36,12 +36,10 @@ class RedisClient:
         try:
             message = json.dumps(job_data)
             result = self.client.publish(channel, message)
-            logger.debug(
-                f"Published job to {channel}: {job_data.get('job_id', 'unknown')}"
-            )
+            logger.debug(f"Published to {channel}: {job_data.get('job_id', 'unknown')}")
             return result > 0
         except Exception as e:
-            logger.error(f"Failed to publish job to {channel}: {e}")
+            logger.error(f"Failed to publish to {channel}: {e}")
             return False
 
     def set_job_status(
@@ -109,31 +107,6 @@ class RedisClient:
             logger.error(f"Failed to get health status for {service_name}: {e}")
             return None
 
-    def queue_message(self, queue_name: str, message_data: Dict[str, Any]) -> bool:
-        """Queue a message for processing"""
-        try:
-            message = json.dumps(message_data)
-            result = self.client.lpush(queue_name, message)
-            logger.debug(f"Queued message to {queue_name}")
-            return result > 0
-        except Exception as e:
-            logger.error(f"Failed to queue message to {queue_name}: {e}")
-            return False
-
-    def dequeue_message(
-        self, queue_name: str, timeout: int = 0
-    ) -> Optional[Dict[str, Any]]:
-        """Dequeue a message from a queue"""
-        try:
-            result = self.client.brpop(queue_name, timeout=timeout)
-            if result:
-                _, message = result
-                return json.loads(message)
-            return None
-        except Exception as e:
-            logger.error(f"Failed to dequeue message from {queue_name}: {e}")
-            return None
-
     def subscribe_to_channel(self, channel: str):
         """Subscribe to a Redis channel for pub/sub"""
         try:
@@ -144,16 +117,6 @@ class RedisClient:
         except Exception as e:
             logger.error(f"Failed to subscribe to channel {channel}: {e}")
             return None
-
-    def test_connection(self) -> bool:
-        """Test Redis connection"""
-        try:
-            self.client.ping()
-            logger.info("Redis connection successful")
-            return True
-        except Exception as e:
-            logger.error(f"Redis connection failed: {e}")
-            return False
 
 
 # Global Redis client instance

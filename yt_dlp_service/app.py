@@ -177,8 +177,11 @@ if __name__ == "__main__":
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 
-    if not redis_client.test_connection():
-        logging.error("Failed to connect to Redis, exiting")
+    try:
+        redis_client.client.ping()
+        logging.info("Connected to Redis successfully")
+    except Exception as e:
+        logging.error(f"Failed to connect to Redis: {e}")
         sys.exit(1)
 
     Thread(target=redis_job_processor, daemon=True).start()

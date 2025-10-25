@@ -27,7 +27,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy in all else
 COPY . .
 
-# Health check via Redis connection
-HEALTHCHECK CMD python -c "from utilities.redis_client import redis_client; exit(0 if redis_client.test_connection() else 1)"
+# Health check via Redis ping
+HEALTHCHECK CMD python -c "import redis; r=redis.Redis(host='redis', port=6379, db=0); exit(0 if r.ping() else 1)"
 
 CMD ["python", "app.py"]

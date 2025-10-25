@@ -127,6 +127,8 @@ class YTDLP(commands.Cog):
             "youtube.com": "YouTube",
             "youtu.be": "YouTube",
             "vxtwitter.com": "Twitter",
+            "fxbsky.app": "Bluesky",
+            "bsky.app": "Bluesky",
         }
 
     async def send_error_to_admin(self, message: discord.Message, error_msg: str):
