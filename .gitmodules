@@ -4,3 +4,6 @@
 [submodule "fops_bot/scripts/Booru_Scripts"]
 	path = fops_bot/scripts/Booru_Scripts
 	url = https://git.kitsunehosting.net/Kenwood/Booru_Scripts
+[submodule "fops_bot/fops_bot/scripts/Booru_Scripts"]
+	path = fops_bot/fops_bot/scripts/Booru_Scripts
+	url = https://git.kitsunehosting.net/Kenwood/Booru_Scripts

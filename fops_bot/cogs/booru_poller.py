@@ -9,7 +9,7 @@ from cogs.subscribe_resources.base_poller import BasePollerCog
 from utilities.post_utils import Post, Posts
 from fops_bot.scripts.Booru_Scripts import booru_utils
 
-BOORU_URL = os.getenv("BOORU_URL", "https://booru.kitsunehosting.net")
+BOORU_URL = os.getenv("BOORU_URL", "https://booru.snowsune.net")
 BOORU_API_KEY = os.getenv("BOORU_KEY")
 BOORU_USERNAME = os.getenv("BOORU_USER")
 
