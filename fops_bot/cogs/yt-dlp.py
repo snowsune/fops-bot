@@ -1,17 +1,19 @@
+import os
+import time
+import uuid
+import json
 import discord
 import logging
-import aiohttp
 import asyncio
-import os
 import tempfile
+
 from typing import Optional
 from discord.ext import commands
 from urllib.parse import urlparse, urlunparse
 
 from cogs.guild_cog import get_guild
 from utilities.influx_metrics import send_metric
-
-YTDLP_API_URL = os.environ.get("YTDLP_API_URL", "http://yt-dlp:5000")
+from utilities.redis_client import redis_client
 
 
 def convert_twitter_link_to_alt(
@@ -51,40 +53,83 @@ def message_contains(message: discord.Message, valid_domains: dict) -> Optional[
     return None
 
 
-async def submit_yt_dlp_job(session, url):
-    async with session.post(f"{YTDLP_API_URL}/submit", json={"url": url}) as resp:
-        data = await resp.json()
-        return data.get("job_id")
+async def submit_yt_dlp_job(url):
+    """Submit a job to yt-dlp service via Redis"""
+    job_id = str(uuid.uuid4())
+    job_data = {"job_id": job_id, "url": url}
+
+    if redis_client.publish_job("ytdlp:jobs", job_data):
+        return job_id
+    return None
 
 
-async def poll_yt_dlp_status(session, job_id, timeout=300):
-    # timeout in seconds (default 5 minutes)
-    for _ in range(timeout):
-        async with session.get(f"{YTDLP_API_URL}/status/{job_id}") as resp:
-            data = await resp.json()
-            if data.get("status") == "done":
-                return True
-            elif data.get("status") == "failed":
-                return False
-        await asyncio.sleep(1)
-    return None  # Timed out
+async def wait_for_job_completion(job_id, timeout=300):
+    """Wait for job completion via Redis pub/sub"""
+
+    # Use asyncio to run the blocking Redis pubsub in a thread
+    loop = asyncio.get_event_loop()
+
+    def _wait_for_message():
+        pubsub = redis_client.subscribe_to_channel("ytdlp:status")
+        if not pubsub:
+            logging.error(f"Failed to subscribe to ytdlp:status channel")
+            return None
+
+        try:
+            start_time = time.time()
+
+            for message in pubsub.listen():
+                # Check timeout
+                if time.time() - start_time > timeout:
+                    logging.warning(f"Job {job_id} timed out after {timeout}s")
+                    return None
+
+                if message["type"] == "message":
+                    try:
+                        data = json.loads(message["data"])
+                        if data.get("job_id") == job_id:
+                            status = data.get("status")
+                            if status == "done":
+                                logging.info(f"Job {job_id} completed successfully")
+                                return True
+                            elif status == "failed":
+                                logging.warning(f"Job {job_id} failed")
+                                return False
+                    except json.JSONDecodeError:
+                        continue
+        except Exception as e:
+            logging.error(f"Error waiting for job completion: {e}")
+            return None
+        finally:
+            pubsub.close()
+
+        return None  # Timed out
+
+    # Run the blocking Redis operation in a thread pool
+    result = await loop.run_in_executor(None, _wait_for_message)
+    return result
 
 
-async def download_yt_dlp_result(session, job_id, temp_file_path):
-    async with session.get(f"{YTDLP_API_URL}/result/{job_id}") as resp:
-        if resp.status == 200:
-            with open(temp_file_path, "wb") as f:
-                while True:
-                    chunk = await resp.content.read(1024 * 1024)
-                    if not chunk:
-                        break
-                    f.write(chunk)
-            return temp_file_path
+async def download_yt_dlp_result(job_id, temp_file_path):
+    """Download result file from yt-dlp service"""
+    status_data = redis_client.get_job_status(job_id)
+    if not status_data or status_data.get("status") != "done":
         return None
 
+    result_path = status_data.get("result_path")
+    if not result_path or not os.path.exists(result_path):
+        return None
 
-async def cleanup_yt_dlp_job(session, job_id):
-    await session.post(f"{YTDLP_API_URL}/cleanup/{job_id}")
+    # Copy file to temp location
+    import shutil
+
+    shutil.copy2(result_path, temp_file_path)
+    return temp_file_path
+
+
+async def cleanup_yt_dlp_job(job_id):
+    """Clean up job resources"""
+    redis_client.delete_job_status(job_id)
 
 
 class YTDLP(commands.Cog):
@@ -103,6 +148,8 @@ class YTDLP(commands.Cog):
             "youtube.com": "YouTube",
             "youtu.be": "YouTube",
             "vxtwitter.com": "Twitter",
+            "fxbsky.app": "Bluesky",
+            "bsky.app": "Bluesky",
         }
 
     async def send_error_to_admin(self, message: discord.Message, error_msg: str):
@@ -164,102 +211,89 @@ class YTDLP(commands.Cog):
             return
 
         # Try to download the video
-        async with aiohttp.ClientSession() as session:
-            temp_file = None
-            job_id = None
-            try:
-                job_id = await submit_yt_dlp_job(session, url)
-                if not job_id:
-                    self.logger.warning(f"Failed to submit job for {url}")
-                    await self.send_error_to_admin(
-                        message, "Failed to submit download job"
-                    )
-                    return
+        temp_file = None
+        job_id = None
+        try:
+            job_id = await submit_yt_dlp_job(url)
+            if not job_id:
+                self.logger.warning(f"Failed to submit job for {url}")
+                await self.send_error_to_admin(message, "Failed to submit download job")
+                return
 
-                # Track job submission in InfluxDB
-                from utilities.influx_metrics import send_metric
+            # Track job submission in InfluxDB
+            send_metric("ytdlp_job_submitted", message.guild.id, message.guild.name)
 
-                send_metric("ytdlp_job_submitted", message.guild.id, message.guild.name)
+            ok = await wait_for_job_completion(job_id)
 
-                ok = await poll_yt_dlp_status(session, job_id)
+            if ok is True:
+                # Download to a temp file for Discord upload
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
+                    temp_file = tmp.name
 
-                if ok is True:
-                    # Download to a temp file for Discord upload
-                    with tempfile.NamedTemporaryFile(
-                        delete=False, suffix=".mp4"
-                    ) as tmp:
-                        temp_file = tmp.name
+                result = await download_yt_dlp_result(job_id, temp_file)
+                await cleanup_yt_dlp_job(job_id)
 
-                    result = await download_yt_dlp_result(session, job_id, temp_file)
-                    await cleanup_yt_dlp_job(session, job_id)
+                if result and domain not in twitter_domains:
+                    # Successfully downloaded - reply with the video
+                    try:
+                        await message.reply(
+                            content=f"-# Visit [snowsune.net/fops](https://snowsune.net/fops/redirect) to edit bot settings!",
+                            file=discord.File(result),
+                        )
+                        self.logger.info(f"Successfully posted video for {url}")
 
-                    if result and domain not in twitter_domains:
-                        # Successfully downloaded - reply with the video
-                        try:
-                            await message.reply(
-                                content=f"-# Visit [snowsune.net/fops](https://snowsune.net/fops/redirect) to edit bot settings!",
-                                file=discord.File(result),
-                            )
-                            self.logger.info(f"Successfully posted video for {url}")
+                        # Send metrics to InfluxDB
+                        send_metric(
+                            "video_downloads", message.guild.id, message.guild.name
+                        )
+                        send_metric(
+                            "ytdlp_job_completed",
+                            message.guild.id,
+                            message.guild.name,
+                        )
+                    except discord.errors.HTTPException as e:
+                        self.logger.warning(f"Media too large to post: {e}")
+                        await self.send_error_to_admin(
+                            message, "Media file too large to post"
+                        )
+                else:
+                    # No result or Twitter (likely just an image post) - be silent
+                    self.logger.warning(f"No video result for {url}")
 
-                            # Send metrics to InfluxDB
-                            send_metric(
-                                "video_downloads", message.guild.id, message.guild.name
-                            )
-                            send_metric(
-                                "ytdlp_job_completed",
-                                message.guild.id,
-                                message.guild.name,
-                            )
-                        except discord.errors.HTTPException as e:
-                            self.logger.warning(f"Media too large to post: {e}")
-                            await self.send_error_to_admin(
-                                message, "Media file too large to post"
-                            )
-                    else:
-                        # No result or Twitter (likely just an image post) - be silent
-                        self.logger.warning(f"No video result for {url}")
+            elif ok is False:
+                # Download failed
+                self.logger.warning(f"Download failed for {url}")
+                await cleanup_yt_dlp_job(job_id)
 
-                elif ok is False:
-                    # Download failed
-                    self.logger.warning(f"Download failed for {url}")
-                    await cleanup_yt_dlp_job(session, job_id)
+                # Track job failure in InfluxDB
+                send_metric("ytdlp_job_failed", message.guild.id, message.guild.name)
+                # await self.send_error_to_admin(
+                #     message, "Error downloading video from post"
+                # )
 
-                    # Track job failure in InfluxDB
-                    send_metric(
-                        "ytdlp_job_failed", message.guild.id, message.guild.name
-                    )
-                    # await self.send_error_to_admin(
-                    #     message, "Error downloading video from post"
-                    # )
-
-                else:  # Timed out
-                    self.logger.warning(f"Download timed out for {url}")
-                    if job_id:
-                        await cleanup_yt_dlp_job(session, job_id)
-
-                    # Track job timeout in InfluxDB
-                    send_metric(
-                        "ytdlp_job_timeout", message.guild.id, message.guild.name
-                    )
-                    await self.send_error_to_admin(message, "Download timed out")
-
-            except Exception as e:
-                self.logger.warning(f"yt-dlp API error: {e}")
+            else:  # Timed out
+                self.logger.warning(f"Download timed out for {url}")
                 if job_id:
-                    await cleanup_yt_dlp_job(session, job_id)
+                    await cleanup_yt_dlp_job(job_id)
 
-                # Track job error in InfluxDB
-                send_metric("ytdlp_job_error", message.guild.id, message.guild.name)
-                # Only send to admin if it's not a connection error (service down)
-                if "Cannot connect" not in str(e):
-                    await self.send_error_to_admin(
-                        message, f"Unexpected error: {str(e)}"
-                    )
+                # Track job timeout in InfluxDB
+                send_metric("ytdlp_job_timeout", message.guild.id, message.guild.name)
+                await self.send_error_to_admin(message, "Download timed out")
 
-            finally:
-                if temp_file and os.path.exists(temp_file):
-                    os.remove(temp_file)
+        except Exception as e:
+            self.logger.warning(f"yt-dlp Redis error: {e}")
+            if job_id:
+                await cleanup_yt_dlp_job(job_id)
+
+            # Track job error in InfluxDB
+            send_metric("ytdlp_job_error", message.guild.id, message.guild.name)
+            # Only send to admin if it's not a connection error (service down)
+            if "Redis connection" not in str(e):
+                await self.send_error_to_admin(message, f"Unexpected error: {str(e)}")
+
+        finally:
+            if temp_file and os.path.exists(temp_file):
+                os.remove(temp_file)
 
         # Twitter link obfuscation (fxtwitter.com reposting)
         if (

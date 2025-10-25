@@ -1,3 +1,2 @@
-Flask
 yt-dlp
-waitress>=2.0.0
+redis

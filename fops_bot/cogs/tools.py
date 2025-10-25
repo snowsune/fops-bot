@@ -5,13 +5,13 @@ import asyncio
 import subprocess
 import re
 import os
-import aiohttp
 from discord import app_commands
 from discord.ext import commands, tasks
 from datetime import datetime
 from typing import Optional, cast
 
 from utilities.influx_metrics import send_metric
+from utilities.redis_client import redis_client
 
 from utilities.common import seconds_until
 from utilities.database import (
@@ -27,8 +27,6 @@ from utilities.database import (
 )
 from cogs.changelog import get_current_changelog
 from fops_bot.models import get_session, KeyValueStore
-
-YTDLP_API_URL = os.environ.get("YTDLP_API_URL", "http://yt-dlp:5000")
 
 
 class ToolCog(commands.Cog, name="ToolsCog"):
@@ -61,19 +59,17 @@ class ToolCog(commands.Cog, name="ToolsCog"):
             f"Commands run today: {self.command_counter}",
         ]
 
-        # Check for active yt-dlp jobs
+        # Check for active yt-dlp jobs via Redis
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(f"{YTDLP_API_URL}/health", timeout=3) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        jobs_count = data.get("jobs", 0)
-                        if jobs_count > 0:
-                            statuses.append(
-                                f"Processing {jobs_count} download{'s' if jobs_count > 1 else ''}"
-                            )
+            health_data = redis_client.get_service_health("ytdlp")
+            if health_data:
+                jobs_count = health_data.get("jobs", 0)
+                if jobs_count > 0:
+                    statuses.append(
+                        f"Processing {jobs_count} download{'s' if jobs_count > 1 else ''}"
+                    )
         except Exception:
-            self.logger.error("Failed to check yt-dlp jobs!")
+            self.logger.error("Failed to check yt-dlp jobs via Redis!")
 
         # Cycle through the statuses randomly
         new_status = random.choice(statuses)
@@ -130,21 +126,16 @@ class ToolCog(commands.Cog, name="ToolsCog"):
         github_link = "Unknown"
         fa_last_poll_str = None
 
-        # yt-dlp version from service health endpoint
+        # yt-dlp version from Redis health data
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(f"{YTDLP_API_URL}/health", timeout=5) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        yt_dlp_version = data.get("yt-dlp_version", "Unknown")
-                        # Also grab job count for bonus info
-                        jobs_count = data.get("jobs", 0)
-                        if jobs_count > 0:
-                            yt_dlp_version += f" ({jobs_count} jobs)"
-                    else:
-                        yt_dlp_version = f"Service unavailable (HTTP {resp.status})"
-        except asyncio.TimeoutError:
-            yt_dlp_version = "Timeout (service not responding)"
+            health_data = redis_client.get_service_health("ytdlp")
+            if health_data:
+                yt_dlp_version = health_data.get("yt-dlp_version", "Unknown")
+                jobs_count = health_data.get("jobs", 0)
+                if jobs_count > 0:
+                    yt_dlp_version += f" ({jobs_count} jobs)"
+            else:
+                yt_dlp_version = "Service unavailable (no health data)"
         except Exception as e:
             yt_dlp_version = f"Error: {e}"
 
