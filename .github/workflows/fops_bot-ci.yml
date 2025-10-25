@@ -148,6 +148,8 @@ jobs:
           load: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: |
+            GIT_COMMIT=${{ github.sha }}
           tags: |
             ${{ matrix.image }}:latest
             ${{ matrix.image }}:${{ env.BRANCH_TAG }}

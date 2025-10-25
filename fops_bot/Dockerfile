@@ -7,6 +7,10 @@ LABEL authors="vixi@snowsue.net"
 ARG APP_NAME=fops-bot
 ENV APP_NAME=${APP_NAME}
 
+# Git commit hash for versioning
+ARG GIT_COMMIT=unknown
+ENV GIT_COMMIT=${GIT_COMMIT}
+
 # App home
 ARG HOME="/app"
 ENV HOME=${HOME}
