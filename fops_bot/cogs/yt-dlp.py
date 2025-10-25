@@ -1,10 +1,12 @@
+import os
+import time
+import uuid
+import json
 import discord
 import logging
 import asyncio
-import os
 import tempfile
-import uuid
-import json
+
 from typing import Optional
 from discord.ext import commands
 from urllib.parse import urlparse, urlunparse
@@ -63,30 +65,49 @@ async def submit_yt_dlp_job(url):
 
 async def wait_for_job_completion(job_id, timeout=300):
     """Wait for job completion via Redis pub/sub"""
-    pubsub = redis_client.subscribe_to_channel("ytdlp:status")
-    if not pubsub:
-        return None  # Failed to subscribe
 
-    try:
-        for message in pubsub.listen():
-            if message["type"] == "message":
-                try:
-                    data = json.loads(message["data"])
-                    if data.get("job_id") == job_id:
-                        status = data.get("status")
-                        if status == "done":
-                            return True
-                        elif status == "failed":
-                            return False
-                except json.JSONDecodeError:
-                    continue
-    except Exception as e:
-        logging.error(f"Error waiting for job completion: {e}")
-        return None
-    finally:
-        pubsub.close()
+    # Use asyncio to run the blocking Redis pubsub in a thread
+    loop = asyncio.get_event_loop()
 
-    return None  # Timed out
+    def _wait_for_message():
+        pubsub = redis_client.subscribe_to_channel("ytdlp:status")
+        if not pubsub:
+            logging.error(f"Failed to subscribe to ytdlp:status channel")
+            return None
+
+        try:
+            start_time = time.time()
+
+            for message in pubsub.listen():
+                # Check timeout
+                if time.time() - start_time > timeout:
+                    logging.warning(f"Job {job_id} timed out after {timeout}s")
+                    return None
+
+                if message["type"] == "message":
+                    try:
+                        data = json.loads(message["data"])
+                        if data.get("job_id") == job_id:
+                            status = data.get("status")
+                            if status == "done":
+                                logging.info(f"Job {job_id} completed successfully")
+                                return True
+                            elif status == "failed":
+                                logging.warning(f"Job {job_id} failed")
+                                return False
+                    except json.JSONDecodeError:
+                        continue
+        except Exception as e:
+            logging.error(f"Error waiting for job completion: {e}")
+            return None
+        finally:
+            pubsub.close()
+
+        return None  # Timed out
+
+    # Run the blocking Redis operation in a thread pool
+    result = await loop.run_in_executor(None, _wait_for_message)
+    return result
 
 
 async def download_yt_dlp_result(job_id, temp_file_path):
