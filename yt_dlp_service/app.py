@@ -110,8 +110,8 @@ def redis_job_processor():
     """Process jobs from Redis queue"""
     pubsub = redis_client.subscribe_to_channel(YTDLP_JOB_CHANNEL)
     if not pubsub:
-        logging.error("Failed to subscribe to Redis job channel")
-        return
+        logging.error("Failed to subscribe to Redis job channel, exiting...")
+        sys.exit(1)
 
     logging.info("Started Redis job processor")
     executor = ThreadPoolExecutor(max_workers=MAX_WORKERS)
@@ -140,7 +140,9 @@ def redis_job_processor():
                     logging.error(f"Error processing job: {e}")
 
     except Exception as e:
-        logging.error(f"Redis job processor error: {e}")
+        logging.error(f"Redis job processor error: {e}, exiting...")
+        executor.shutdown(wait=False)
+        sys.exit(1)
     finally:
         pubsub.close()
         executor.shutdown()
