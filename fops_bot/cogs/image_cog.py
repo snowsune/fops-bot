@@ -11,43 +11,111 @@ from utilities.image_utils import (
     IMAGE_TASKS,
 )
 
-from typing import Optional, Callable
+from typing import Optional
 
 # Just makes sure we decorate where the image_tasks go, cool python!
 import utilities.image_tasks
+
+
+class TaskSelectView(discord.ui.View):
+    """View with select dropdown for task selection."""
+
+    def __init__(
+        self, tasks: list[str], requires_attachment: bool, message: discord.Message
+    ):
+        super().__init__(timeout=300)
+        self.tasks = tasks
+        self.requires_attachment = requires_attachment
+        self.message = message
+
+        # Add select dropdown
+        options = [discord.SelectOption(label=task, value=task) for task in tasks]
+        self.select = discord.ui.Select(
+            placeholder="Select a tool...",
+            options=options[:25],  # Discord limit
+        )
+        self.select.callback = self.on_select
+        self.add_item(self.select)
+
+    async def on_select(self, interaction: discord.Interaction):
+        """Handle task selection."""
+        task_name = self.select.values[0]
+        await interaction.response.defer()
+
+        cog = interaction.client.get_cog("ImageCog")
+        if cog:
+            await cog.process_image_task(interaction, task_name, self.message)
+        else:
+            await interaction.followup.send(
+                "Error: ImageCog not found.", ephemeral=True
+            )
 
 
 class ImageCog(commands.Cog, name="ImageCog"):
     def __init__(self, bot):
         self.bot = bot
         self.logger = logging.getLogger(__name__)
-        self.register_image_tasks()
+        self.register_context_menus()
 
-    def register_image_tasks(self):
-        """
-        Dynamically register context menu commands for image tasks.
-        """
-        from utilities.image_utils import IMAGE_TASKS  # Import the registered tasks
+    def register_context_menus(self):
+        """Register Fops Image and Fops Text context menu commands."""
+        # Fops Image - for tasks requiring attachments
+        image_menu = app_commands.ContextMenu(
+            name="Fops Image",
+            callback=self.show_image_modal,
+        )
+        self.bot.tree.add_command(image_menu)
 
-        for task_name in IMAGE_TASKS:
-            # Create a context menu for each task
-            context_menu = app_commands.ContextMenu(
-                name=task_name.title(),
-                callback=self.process_image_context,
-            )
-            # Attach the task name to the context menu
-            context_menu.task_name = task_name
-            self.logger.info(f"Added image task {task_name} to context menu.")
+        # Fops Text - for text-based tasks
+        text_menu = app_commands.ContextMenu(
+            name="Fops Text",
+            callback=self.show_text_modal,
+        )
+        self.bot.tree.add_command(text_menu)
 
-            # Add the command to the bot
-            self.bot.tree.add_command(context_menu)
-
-    # Handle image processing via context menu.
-    async def process_image_context(
+    async def show_image_modal(
         self, interaction: discord.Interaction, message: discord.Message
     ):
-        task_name = interaction.command.task_name
-        await self.process_image_task(interaction, task_name, message)
+        """Show modal with task selection for image tasks."""
+        # Get tasks that require attachments
+        tasks = [
+            name
+            for name, metadata in IMAGE_TASKS.items()
+            if metadata.get("requires_attachment", True)
+        ]
+
+        if not tasks:
+            await interaction.response.send_message(
+                "No image tasks available.", ephemeral=True
+            )
+            return
+
+        view = TaskSelectView(tasks, requires_attachment=True, message=message)
+        await interaction.response.send_message(
+            "Select an image tool:", view=view, ephemeral=True
+        )
+
+    async def show_text_modal(
+        self, interaction: discord.Interaction, message: discord.Message
+    ):
+        """Show modal with task selection for text tasks."""
+        # Get tasks that don't require attachments
+        tasks = [
+            name
+            for name, metadata in IMAGE_TASKS.items()
+            if not metadata.get("requires_attachment", True)
+        ]
+
+        if not tasks:
+            await interaction.response.send_message(
+                "No text tasks available.", ephemeral=True
+            )
+            return
+
+        view = TaskSelectView(tasks, requires_attachment=False, message=message)
+        await interaction.response.send_message(
+            "Select a text tool:", view=view, ephemeral=True
+        )
 
     async def process_image_task(
         self,
@@ -55,20 +123,24 @@ class ImageCog(commands.Cog, name="ImageCog"):
         task_name: str,
         message: Optional[discord.Message] = None,
     ):
-        """
-        Process the image using the selected task.
-        """
-
+        """Process the image using the selected task."""
         task_metadata = IMAGE_TASKS.get(task_name)
         if not task_metadata:
-            await interaction.response.send_message(
-                f"Task '{task_name}' is not registered.", ephemeral=True
-            )
+            if interaction.response.is_done():
+                await interaction.followup.send(
+                    f"Task '{task_name}' is not registered.", ephemeral=True
+                )
+            else:
+                await interaction.response.send_message(
+                    f"Task '{task_name}' is not registered.", ephemeral=True
+                )
             return
 
         requires_attachment = task_metadata.get("requires_attachment", True)
 
-        await interaction.response.defer()  # Acknowledge the interaction
+        # Only defer if not already done (for direct calls, not select callbacks)
+        if not interaction.response.is_done():
+            await interaction.response.defer()
 
         try:
             if requires_attachment:
@@ -79,7 +151,6 @@ class ImageCog(commands.Cog, name="ImageCog"):
                     return
 
                 attachment = message.attachments[0]
-
                 if not attachment.content_type.startswith("image/"):
                     await interaction.followup.send(
                         "The attachment is not an image!", ephemeral=True
@@ -90,7 +161,6 @@ class ImageCog(commands.Cog, name="ImageCog"):
                 input_image = load_image_from_bytes(image_bytes)
                 output_image = apply_image_task(task_name, input_image)
             else:
-                # Handle text-based tasks
                 if not message or not message.content:
                     await interaction.followup.send(
                         "This task requires a text message!", ephemeral=True
@@ -100,8 +170,6 @@ class ImageCog(commands.Cog, name="ImageCog"):
                 output_image = apply_image_task(task_name, message.content)
 
             output_bytes = save_image_to_bytes(output_image)
-
-            # Send the result
             await interaction.followup.send(
                 file=discord.File(io.BytesIO(output_bytes), f"{task_name}.png")
             )
@@ -110,15 +178,6 @@ class ImageCog(commands.Cog, name="ImageCog"):
             await interaction.followup.send(
                 "Failed to process the task.", ephemeral=True
             )
-            raise e
-
-    async def cog_unload(self):
-        """
-        Unload the context menus when the cog is unloaded.
-        """
-        for command in self.bot.tree.get_commands(type=discord.AppCommandType.message):
-            if hasattr(command, "task_name"):
-                self.bot.tree.remove_command(command.name)
 
 
 async def setup(bot):

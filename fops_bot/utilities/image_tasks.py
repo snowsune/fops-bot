@@ -63,6 +63,33 @@ def vixi_says_task(message: str) -> Image.Image:
     return frame
 
 
+@register_image_task("Vyxxy Says", requires_attachment=False)
+def vyxxy_says_task(message: str) -> Image.Image:
+    logging.info(f"Processing vyxxysays with message: {message}")
+
+    # Load the base template
+    frame = Image.open("fops_bot/templates/vyxxysays.png")
+
+    # Define text region (x, y, width, height)
+    text_region = (380, 120, 900 - 380, 400 - 120)
+
+    # Initialize drawing context
+    draw = ImageDraw.Draw(frame)
+
+    # Fit the text into the specified region
+    font, lines = fit_text_to_region(
+        draw, message, text_region, "fops_bot/templates/impact.ttf", max_font_size=100
+    )
+
+    # Get the position to start drawing text (top-left corner of the region)
+    x, y, _, _ = text_region
+
+    # Render the text onto the image
+    draw.text((x, y), lines, font=font, fill=(255, 255, 255))
+
+    return frame
+
+
 @register_image_task("Soy Point", requires_attachment=True)
 def browsing_fox_task(input_image: Image.Image) -> Image.Image:
     frame = Image.open("fops_bot/templates/soy.png")
