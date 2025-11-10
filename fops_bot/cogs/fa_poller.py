@@ -3,6 +3,7 @@ import faapi
 import discord
 import logging
 import time
+import asyncio
 from dataclasses import dataclass
 from typing import List
 
@@ -72,37 +73,42 @@ class FA_PollerCog(BasePollerCog):
         cookies = RequestsCookieJar()
         cookies.set("a", FA_COOKIE_A or "")
         cookies.set("b", FA_COOKIE_B or "")
-        api = faapi.FAAPI(cookies)
 
-        self.logger.debug(f"Fetching gallery for artist '{search_criteria}'.")
-        gallery, _ = api.gallery(search_criteria, 1)
+        def fetch_posts() -> Posts:
+            api = faapi.FAAPI(cookies)
 
-        if not gallery:
-            self.logger.warning(f"No gallery for {search_criteria}.")
-            return FAPosts([])
-
-        # Get post IDs from gallery and fetch full submissions
-        latest_post_ids = [str(post.id) for post in gallery[:5]]
-
-        # Fetch full submissions for each post ID
-        fa_posts = []
-        for post_id in latest_post_ids:
+            self.logger.debug(f"Fetching gallery for artist '{search_criteria}'.")
             try:
-                submission, _ = api.submission(int(post_id))
-                fa_post = FAPost.from_api_submission(submission, post_id)
-                fa_posts.append(fa_post)
+                gallery, _ = api.gallery(search_criteria, 1)
             except Exception as e:
-                self.logger.warning(
-                    f"Failed to fetch full submission for {post_id}: {e}"
-                )
-                continue
+                self.logger.warning(f"Gallery fetch failed for {search_criteria}: {e}")
+                return FAPosts([])
 
-        fa_posts_collection = FAPosts(fa_posts)
+            if not gallery:
+                self.logger.warning(f"No gallery for {search_criteria}.")
+                return FAPosts([])
 
-        self.logger.debug(
-            f"Latest post IDs for '{search_criteria}': {fa_posts_collection.ids}"
-        )
-        return fa_posts_collection
+            latest_post_ids = [str(post.id) for post in gallery[:5]]
+
+            fa_posts = []
+            for post_id in latest_post_ids:
+                try:
+                    submission, _ = api.submission(int(post_id))
+                    fa_post = FAPost.from_api_submission(submission, post_id)
+                    fa_posts.append(fa_post)
+                except Exception as e:
+                    self.logger.warning(
+                        f"Failed to fetch full submission for {post_id}: {e}"
+                    )
+                    continue
+
+            fa_posts_collection = FAPosts(fa_posts)
+            self.logger.debug(
+                f"Latest post IDs for '{search_criteria}': {fa_posts_collection.ids}"
+            )
+            return fa_posts_collection
+
+        return await asyncio.to_thread(fetch_posts)
 
     async def notify_owner_of_failures(self, search_criteria: str, error: Exception):
         """Notify me when FA poller encounters 5 consecutive failures"""
