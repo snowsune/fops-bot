@@ -73,6 +73,7 @@ def ensure_guild_exists(guild_id: int, guild_name: str = "") -> Guild:
                 twitter_wrapper="fxtwitter.com",
                 admin_channel_id=None,
                 ignored_channels=[],
+                recent_logs=[],
             )
             session.add(guild)
             session.commit()

@@ -12,6 +12,11 @@ from cogs.guild_cog import get_guild
 from utilities.post_utils import Post, Posts
 
 from utilities.influx_metrics import send_metric
+from utilities.guild_log import (
+    info as guild_log_info,
+    warning as guild_log_warning,
+    error as guild_log_error,
+)
 
 OWNER_UID = int(os.getenv("OWNER_UID", "0"))
 SPOILER_TAGS = set(os.getenv("SPOILER_TAGS", "gore bestiality noncon").split())
@@ -144,10 +149,19 @@ class BasePollerCog(commands.Cog):
         positive_filters, negative_filters = parse_filters(sub.filters)
 
         if positive_filters and not (tags & positive_filters):
-            self.logger.info(f"Skipping {post.id} due to missing required tags")
+            guild_log_info(
+                self.logger,
+                sub.guild_id,
+                f"Skipping {post.id} due to missing required tags ({positive_filters} not in {tags})",
+            )
             return False
         if any(tag in tags for tag in negative_filters):
-            self.logger.info(f"Skipping {post.id} due to excluded tags")
+            matched = {tag for tag in negative_filters if tag in tags}
+            guild_log_info(
+                self.logger,
+                sub.guild_id,
+                f"Skipping {post.id} due to excluded tags (found {matched} in {tags})",
+            )
             return False
 
         # Prepare message
@@ -161,7 +175,7 @@ class BasePollerCog(commands.Cog):
                 str(sub.channel_id), sub.id
             )
             if error_type:
-                self.logger.error(error_msg)
+                guild_log_error(self.logger, sub.guild_id, error_msg)
                 return False
 
             # Use NSFW site if channel is NSFW and post supports it
@@ -172,7 +186,11 @@ class BasePollerCog(commands.Cog):
             post.id, tags, url, None if is_pm else channel
         )
         if not should_post:
-            self.logger.info(f"Skipping {post.id} due to spoiler tags")
+            guild_log_info(
+                self.logger,
+                sub.guild_id,
+                f"Skipping {post.id} due to spoiler tags",
+            )
             return False
 
         subtitle = "\n-# Visit [snowsune.net/fops](https://snowsune.net/fops/redirect/) to manage this feed."
@@ -182,9 +200,8 @@ class BasePollerCog(commands.Cog):
         if not is_pm and sub.guild_id:
             guild_settings = get_guild(sub.guild_id)
             if guild_settings and guild_settings.is_frozen():
-                self.logger.warning(
-                    f"Guild {sub.guild_id} is FROZEN - skipping post {post.id} to channel {sub.channel_id}"
-                )
+                msg = f"Guild {sub.guild_id} is FROZEN - skipping post {post.id} to channel {sub.channel_id}"
+                guild_log_warning(self.logger, sub.guild_id, msg)
                 # Return True to mark as "processed" so IDs get updated
                 # This prevents spam when the guild is unfrozen
                 return True
@@ -194,24 +211,48 @@ class BasePollerCog(commands.Cog):
             if is_pm:
                 user = await self.bot.fetch_user(sub.user_id)
                 await user.send(msg)
-                self.logger.info(f"Posted {post.id} to user {sub.user_id}")
+                guild_log_info(
+                    self.logger,
+                    sub.guild_id,
+                    f"Posted {post.id} to user {sub.user_id} ({sub.service_type} for {sub.search_criteria})",
+                )
                 return True
             else:
                 if channel:
                     await channel.send(msg)
-                    self.logger.info(f"Posted {post.id} to channel {sub.channel_id}")
+                    guild_log_info(
+                        self.logger,
+                        sub.guild_id,
+                        f"Posted {post.id} to channel {sub.channel_id} ({sub.service_type} for {sub.search_criteria})",
+                    )
                     return True
                 else:
-                    self.logger.error(f"Channel {sub.channel_id} not accessible")
+                    guild_log_error(
+                        self.logger,
+                        sub.guild_id,
+                        f"Channel {sub.channel_id} not accessible",
+                    )
                     return False
         except discord.Forbidden as e:
-            self.logger.error(f"Permission denied posting to {sub.channel_id}: {e}")
+            guild_log_error(
+                self.logger,
+                sub.guild_id,
+                f"Permission denied posting to {sub.channel_id}: {e}",
+            )
             return False
         except discord.NotFound as e:
-            self.logger.error(f"Channel/user not found for {sub.channel_id}: {e}")
+            guild_log_error(
+                self.logger,
+                sub.guild_id,
+                f"Channel/user not found for {sub.channel_id}: {e}",
+            )
             return False
         except Exception as e:
-            self.logger.error(f"Error posting {post.id}: {e}")
+            guild_log_error(
+                self.logger,
+                sub.guild_id,
+                f"Error posting {post.id}: {e}",
+            )
             return False
 
     async def poll_loop(self):
@@ -352,8 +393,10 @@ class BasePollerCog(commands.Cog):
                         guild_cache[sub.guild_id] = get_guild(sub.guild_id)
                     guild_settings = guild_cache[sub.guild_id]
                     if not guild_settings or not guild_settings.nsfw():
-                        self.logger.info(
-                            f"Skipping subscription {sub.id} because NSFW is disabled for guild {sub.guild_id}"
+                        guild_log_info(
+                            self.logger,
+                            sub.guild_id,
+                            f"Skipping subscription {sub.id} because NSFW is disabled",
                         )
                         sub.last_ran = now
                         continue
@@ -368,27 +411,39 @@ class BasePollerCog(commands.Cog):
                     sub.last_ran = now
                     continue
                 elif action == "catchup":
-                    self.logger.warning(f"Subscription {sub.id}: {reason}")
+                    guild_log_warning(
+                        self.logger,
+                        sub.guild_id,
+                        f"Subscription {sub.id}: {reason}",
+                    )
                     sub.last_reported_id = posts_to_process[0].id
                     sub.last_ran = now
                     continue
                 elif action == "post":
-                    self.logger.info(
-                        f"Subscription {sub.id}: {reason} - processing {len(posts_to_process)} posts"
+                    guild_log_info(
+                        self.logger,
+                        sub.guild_id,
+                        f"Subscription {sub.id}: {reason} - processing {len(posts_to_process)} posts",
                     )
 
                     # Process posts in order (oldest first)
                     last_successful_post = None
                     for post in posts_to_process:
-                        self.logger.info(f"Processing post {post.id} for sub {sub.id}")
+                        guild_log_info(
+                            self.logger,
+                            sub.guild_id,
+                            f"Processing post {post.id} for sub {sub.id}",
+                        )
 
                         # Process the post
                         post_success = await self.process_single_post(sub, post)
 
                         if post_success:
                             last_successful_post = post
-                            self.logger.info(
-                                f"Successfully processed {post.id} for sub {sub.id}"
+                            guild_log_info(
+                                self.logger,
+                                sub.guild_id,
+                                f"Successfully processed {post.id} for sub {sub.id}",
                             )
 
                             # Track automatic post in InfluxDB
@@ -399,8 +454,10 @@ class BasePollerCog(commands.Cog):
                                 post_id=str(post.id),
                             )
                         else:
-                            self.logger.warning(
-                                f"Failed to post {post.id} for sub {sub.id}"
+                            guild_log_warning(
+                                self.logger,
+                                sub.guild_id,
+                                f"Failed to post {post.id} for sub {sub.id}",
                             )
 
                     # CRITICAL: Always update the subscription to the last post we attempted

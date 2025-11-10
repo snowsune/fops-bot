@@ -6,12 +6,18 @@ from discord import app_commands
 from discord.ext import commands
 
 from cogs.guild_cog import get_guild
+from utilities.guild_log import (
+    info as guild_log_info,
+    warning as guild_log_warning,
+    error as guild_log_error,
+)
 
 
 class ErrorHandlerCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.bot.tree.on_error = self.on_tree_error  # Manually bind the tree error here
+        self.logger = logging.getLogger(__name__)
 
         # If debug mode is enabled.
         self.debug = str(os.environ.get("DEBUG", "0")).lower() in (
@@ -37,7 +43,8 @@ class ErrorHandlerCog(commands.Cog):
         """
         Global handler for all app command errors (slash commands).
         """
-        logging.warn(f"Got a tree error: {str(error)}")
+        guild_id = getattr(interaction.guild, "id", None)
+        guild_log_warning(self.logger, guild_id, f"Got a tree error: {str(error)}")
 
         # Notify the user
         await self.notify_user(interaction, error)
@@ -72,8 +79,10 @@ class ErrorHandlerCog(commands.Cog):
                 ephemeral=True,
             )
         except discord.HTTPException:
-            logging.error(
-                "Failed to send user notification for application command error"
+            guild_log_error(
+                self.logger,
+                getattr(interaction.guild, "id", None),
+                "Failed to send user notification for application command error",
             )
 
     async def send_error_report(self, interaction: discord.Interaction, error):
@@ -83,25 +92,35 @@ class ErrorHandlerCog(commands.Cog):
         Uses the admin_channel_id from the guild settings.
         """
         if not interaction.guild:
-            logging.debug("No guild for interaction, skipping error report")
+            self.logger.debug("No guild for interaction, skipping error report")
             return
 
         # Get guild settings
         guild_settings = get_guild(interaction.guild.id)
         if not guild_settings:
-            logging.warning(f"No guild settings found for {interaction.guild.id}")
+            guild_log_warning(
+                self.logger,
+                interaction.guild.id,
+                f"No guild settings found for {interaction.guild.id}",
+            )
             return
 
         admin_channel_id = guild_settings.admin_channel()
         if not admin_channel_id:
-            logging.debug(
-                f"No admin channel configured for guild {interaction.guild.id}"
+            guild_log_info(
+                self.logger,
+                interaction.guild.id,
+                "No admin channel configured for guild",
             )
             return
 
         channel = self.bot.get_channel(admin_channel_id)
         if not channel:
-            logging.warning(f"Admin channel {admin_channel_id} not found")
+            guild_log_warning(
+                self.logger,
+                interaction.guild.id,
+                f"Admin channel {admin_channel_id} not found",
+            )
             return
 
         # Format and send error report
@@ -117,7 +136,11 @@ class ErrorHandlerCog(commands.Cog):
         try:
             await channel.send(error_message)
         except discord.HTTPException as e:
-            logging.error(f"Failed to send error report to admin channel: {e}")
+            guild_log_error(
+                self.logger,
+                interaction.guild.id,
+                f"Failed to send error report to admin channel: {e}",
+            )
 
     @app_commands.command(name="test_error_handler")
     @app_commands.checks.has_permissions(administrator=True)

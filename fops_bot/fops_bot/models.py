@@ -53,6 +53,7 @@ class Guild(Base):
         default="fxtwitter.com",
         nullable=False,
     )  # Preferred Twitter mirror domain
+    recent_logs = Column(JSON, default=list, nullable=False)
 
     # Channel configurations
     admin_channel_id = Column(BigInteger, nullable=True)
@@ -78,6 +79,27 @@ class Guild(Base):
     def twitter_wrapper_domain(self) -> str:
         """Return the preferred Twitter wrapper domain."""
         return self.twitter_wrapper or "fxtwitter.com"
+
+    def append_log_entry(self, level: str, message: str, limit: int = 10) -> None:
+        """
+        Appends a log entry to the little store attached for each guild.
+
+        This is just ment to give server owners a quick little view
+        of what the bot is up to/any errors or warnings! So only the last
+        10 are stored."""
+
+        entries = list(self.recent_logs or [])
+        entries.append(
+            {
+                "ts": datetime.now(timezone.utc).isoformat(),
+                "level": level,
+                "message": message,
+            }
+        )
+
+        if len(entries) > limit:
+            entries = entries[-limit:]
+        self.recent_logs = entries
 
     def admin_channel(self) -> int | None:
         """Get the admin channel ID."""

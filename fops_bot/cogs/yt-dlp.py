@@ -14,6 +14,11 @@ from urllib.parse import urlparse, urlunparse
 from cogs.guild_cog import get_guild
 from utilities.influx_metrics import send_metric
 from utilities.redis_client import redis_client
+from utilities.guild_log import (
+    info as guild_log_info,
+    warning as guild_log_warning,
+    error as guild_log_error,
+)
 
 
 def convert_twitter_link_to_alt(
@@ -174,7 +179,11 @@ class YTDLP(commands.Cog):
                     f"⚠️ **yt-dlp Error**\n{error_msg}\n[Jump to message]({message_link})"
                 )
         except Exception as e:
-            self.logger.error(f"Failed to send error to admin channel: {e}")
+            guild_log_error(
+                self.logger,
+                message.guild.id if message.guild else None,
+                f"Failed to send error to admin channel: {e}",
+            )
 
     @commands.Cog.listener("on_message")
     async def mediaListener(self, message: discord.Message):
@@ -191,14 +200,18 @@ class YTDLP(commands.Cog):
         if not guild_settings or not guild_settings.dlp():
             return
 
+        guild_id = message.guild.id
+
         # Check if the message contains a domain we can convert
         domain = message_contains(message, self.valid_domains)
         if not domain:
             return
 
         # We got one!
-        self.logger.info(
-            f'{self.valid_domains[domain]} Listener caught message "{message.content}" in {message.guild.name}'
+        guild_log_info(
+            self.logger,
+            guild_id,
+            f'{self.valid_domains[domain]} Listener caught message "{message.content}" in {message.guild.name}',
         )
 
         # Be explicit with twitter domains
@@ -207,7 +220,11 @@ class YTDLP(commands.Cog):
         # Walk and find the URL
         url = next((word for word in message.content.split() if "://" in word), None)
         if not url:
-            self.logger.warning("No URL found in message with valid domain")
+            guild_log_warning(
+                self.logger,
+                guild_id,
+                "No URL found in message with valid domain",
+            )
             return
 
         # Try to download the video
@@ -216,7 +233,9 @@ class YTDLP(commands.Cog):
         try:
             job_id = await submit_yt_dlp_job(url)
             if not job_id:
-                self.logger.warning(f"Failed to submit job for {url}")
+                guild_log_warning(
+                    self.logger, guild_id, f"Failed to submit job for {url}"
+                )
                 await self.send_error_to_admin(message, "Failed to submit download job")
                 return
 
@@ -240,7 +259,9 @@ class YTDLP(commands.Cog):
                             content=f"-# Visit [snowsune.net/fops](https://snowsune.net/fops/redirect) to edit bot settings!",
                             file=discord.File(result),
                         )
-                        self.logger.info(f"Successfully posted video for {url}")
+                        guild_log_info(
+                            self.logger, guild_id, f"Successfully posted video for {url}"
+                        )
 
                         # Send metrics to InfluxDB
                         send_metric(
@@ -252,17 +273,24 @@ class YTDLP(commands.Cog):
                             message.guild.name,
                         )
                     except discord.errors.HTTPException as e:
-                        self.logger.warning(f"Media too large to post: {e}")
+                        guild_log_warning(
+                            self.logger,
+                            guild_id,
+                            f"Media too large to post: {e}",
+                        )
                         await self.send_error_to_admin(
                             message, "Media file too large to post"
                         )
                 else:
-                    # No result or Twitter (likely just an image post) - be silent
-                    self.logger.warning(f"No video result for {url}")
+                    guild_log_warning(
+                        self.logger, guild_id, f"No video result for {url}"
+                    )
 
             elif ok is False:
                 # Download failed
-                self.logger.warning(f"Download failed for {url}")
+                guild_log_warning(
+                    self.logger, guild_id, f"Download failed for {url}"
+                )
                 await cleanup_yt_dlp_job(job_id)
 
                 # Track job failure in InfluxDB
@@ -272,7 +300,9 @@ class YTDLP(commands.Cog):
                 # )
 
             else:  # Timed out
-                self.logger.warning(f"Download timed out for {url}")
+                guild_log_warning(
+                    self.logger, guild_id, f"Download timed out for {url}"
+                )
                 if job_id:
                     await cleanup_yt_dlp_job(job_id)
 
@@ -281,7 +311,9 @@ class YTDLP(commands.Cog):
                 await self.send_error_to_admin(message, "Download timed out")
 
         except Exception as e:
-            self.logger.warning(f"yt-dlp Redis error: {e}")
+            guild_log_warning(
+                self.logger, guild_id, f"yt-dlp Redis error: {e}"
+            )
             if job_id:
                 await cleanup_yt_dlp_job(job_id)
 
@@ -322,12 +354,16 @@ class YTDLP(commands.Cog):
                 )
                 await message.delete()
             except discord.errors.Forbidden:
-                self.logger.warning(
-                    f"Bot lacks permissions to delete messages in {message.guild.name}."
+                guild_log_warning(
+                    self.logger,
+                    guild_id,
+                    f"Bot lacks permissions to delete messages in {message.guild.name}.",
                 )
             except discord.errors.NotFound:
-                self.logger.warning(
-                    f"Message was already deleted in {message.guild.name}."
+                guild_log_warning(
+                    self.logger,
+                    guild_id,
+                    f"Message was already deleted in {message.guild.name}.",
                 )
 
 
