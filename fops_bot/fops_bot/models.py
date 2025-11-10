@@ -48,6 +48,11 @@ class Guild(Base):
         default=False,
         nullable=False,
     )  # If true, we'll enable the twitter obfuscation
+    twitter_wrapper = Column(
+        String,
+        default="fxtwitter.com",
+        nullable=False,
+    )  # Preferred Twitter mirror domain
 
     # Channel configurations
     admin_channel_id = Column(BigInteger, nullable=True)
@@ -69,6 +74,10 @@ class Guild(Base):
     def obfuscate_twitter(self) -> bool:
         """Check if Twitter links should be obfuscated (fxtwitter, etc)."""
         return bool(self.twitter_obfuscate)
+
+    def twitter_wrapper_domain(self) -> str:
+        """Return the preferred Twitter wrapper domain."""
+        return self.twitter_wrapper or "fxtwitter.com"
 
     def admin_channel(self) -> int | None:
         """Get the admin channel ID."""

@@ -302,14 +302,19 @@ class YTDLP(commands.Cog):
             and guild_settings.obfuscate_twitter()
         ):
             try:
+                wrapper_domain = guild_settings.twitter_wrapper_domain()
                 # Find the URL in the message and convert it
                 words = message.content.split()
                 for word in words:
                     if "://" in word:
-                        alt_link = convert_twitter_link_to_alt(word.strip())
+                        alt_link = convert_twitter_link_to_alt(
+                            word.strip(), wrapper_domain
+                        )
                         break
                 else:
-                    alt_link = message.content
+                    alt_link = convert_twitter_link_to_alt(
+                        message.content, wrapper_domain
+                    )
 
                 # Repost with obfuscated link
                 await message.channel.send(

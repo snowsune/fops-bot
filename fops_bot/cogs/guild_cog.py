@@ -70,6 +70,7 @@ def ensure_guild_exists(guild_id: int, guild_name: str = "") -> Guild:
                 allow_nsfw=False,
                 enable_dlp=True,
                 twitter_obfuscate=False,
+                twitter_wrapper="fxtwitter.com",
                 admin_channel_id=None,
                 ignored_channels=[],
             )
