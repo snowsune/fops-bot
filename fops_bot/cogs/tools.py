@@ -2,25 +2,15 @@ import discord
 import logging
 import random
 import asyncio
-import subprocess
-import re
-import os
 from discord import app_commands
 from discord.ext import commands, tasks
 from datetime import datetime
-from typing import Optional, cast
 
 from utilities.influx_metrics import send_metric
 from utilities.redis_client import redis_client
 
 from utilities.common import seconds_until
 from utilities.database import (
-    store_key,
-    retrieve_key,
-    is_feature_enabled,
-    set_feature_state,
-    get_feature_data,
-    get_guilds_with_feature_enabled,
     store_key_number,
     retrieve_key_number,
     get_db_info,
@@ -208,18 +198,6 @@ class ToolCog(commands.Cog, name="ToolsCog"):
             msg += f"\n{fa_last_poll_str}"
         # Follow up with the collected data
         await ctx.followup.send(msg)
-
-    @app_commands.command(name="enable_nsfw")
-    @app_commands.checks.has_permissions(administrator=True)
-    @app_commands.describe(state="Enable or disable NSFW commands for the guild")
-    async def enable_nsfw(self, interaction: discord.Interaction, state: bool):
-        guild_id = cast(int, interaction.guild_id)  # Cast to ensure non-None
-        set_feature_state(guild_id, "enable_nsfw", state, feature_variables=None)
-
-        status = "enabled" if state else "disabled"
-        await interaction.response.send_message(
-            f"NSFW functions have been {status} for this guild.", ephemeral=True
-        )
 
 
 async def setup(bot):

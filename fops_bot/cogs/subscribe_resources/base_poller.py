@@ -339,11 +339,24 @@ class BasePollerCog(commands.Cog):
             now = int(time.time())
             self.logger.debug(f"Latest post IDs for '{search_criteria}': {posts.ids}")
 
-            # Process each subscription in the group
+            guild_cache = {}
+
             for sub in oldest_group:
                 self.logger.debug(
                     f"Processing subscription {sub.id} (user {sub.user_id}, channel {sub.channel_id})"
                 )
+
+                is_pm = getattr(sub, "is_pm", False)
+                if sub.guild_id is not None and not is_pm:
+                    if sub.guild_id not in guild_cache:
+                        guild_cache[sub.guild_id] = get_guild(sub.guild_id)
+                    guild_settings = guild_cache[sub.guild_id]
+                    if not guild_settings or not guild_settings.nsfw():
+                        self.logger.info(
+                            f"Skipping subscription {sub.id} because NSFW is disabled for guild {sub.guild_id}"
+                        )
+                        sub.last_ran = now
+                        continue
 
                 # Determine what to do with this subscription
                 posts_to_process, action, reason = self.determine_posts_to_process(
