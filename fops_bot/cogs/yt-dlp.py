@@ -260,7 +260,9 @@ class YTDLP(commands.Cog):
                             file=discord.File(result),
                         )
                         guild_log_info(
-                            self.logger, guild_id, f"Successfully posted video for {url}"
+                            self.logger,
+                            guild_id,
+                            f"Successfully posted video for {url}",
                         )
 
                         # Send metrics to InfluxDB
@@ -288,9 +290,7 @@ class YTDLP(commands.Cog):
 
             elif ok is False:
                 # Download failed
-                guild_log_warning(
-                    self.logger, guild_id, f"Download failed for {url}"
-                )
+                guild_log_warning(self.logger, guild_id, f"Download failed for {url}")
                 await cleanup_yt_dlp_job(job_id)
 
                 # Track job failure in InfluxDB
@@ -311,9 +311,7 @@ class YTDLP(commands.Cog):
                 await self.send_error_to_admin(message, "Download timed out")
 
         except Exception as e:
-            guild_log_warning(
-                self.logger, guild_id, f"yt-dlp Redis error: {e}"
-            )
+            guild_log_warning(self.logger, guild_id, f"yt-dlp Redis error: {e}")
             if job_id:
                 await cleanup_yt_dlp_job(job_id)
 
@@ -337,21 +335,27 @@ class YTDLP(commands.Cog):
                 wrapper_domain = guild_settings.twitter_wrapper_domain()
                 # Find the URL in the message and convert it
                 words = message.content.split()
+                raw_url = None
                 for word in words:
                     if "://" in word:
-                        alt_link = convert_twitter_link_to_alt(
-                            word.strip(), wrapper_domain
-                        )
+                        raw_url = word.strip()
+                        alt_link = convert_twitter_link_to_alt(raw_url, wrapper_domain)
                         break
                 else:
-                    alt_link = convert_twitter_link_to_alt(
-                        message.content, wrapper_domain
-                    )
+                    raw_url = message.content
+                    alt_link = convert_twitter_link_to_alt(raw_url, wrapper_domain)
 
-                # Repost with obfuscated link
+                preserved_text = message.content.replace(raw_url, "").strip()
+                formatted_text = preserved_text or ""
+                intro_line = f"Originally posted by {message.author.mention}"
+                if formatted_text:
+                    intro_line += f"\n>>> {formatted_text}"
+
                 await message.channel.send(
-                    f"Originally posted by {message.author.mention}: {alt_link}"
-                )
+                    f"{alt_link}\n{intro_line}"
+                )  # This was suggested by Lilifox <3
+
+                # Not all servers allow this permission!
                 await message.delete()
             except discord.errors.Forbidden:
                 guild_log_warning(
