@@ -3,10 +3,11 @@ import discord
 import logging
 import time
 import asyncio
-from typing import List, Optional, Tuple
+from dataclasses import dataclass
+from typing import Dict, List, Optional, Tuple
 
 from discord.ext import commands, tasks
-from fops_bot.models import get_session, Subscription, KeyValueStore
+from fops_bot.models import get_session, Subscription
 from cogs.subscribe_resources.filters import parse_filters, format_spoiler_post
 from cogs.guild_cog import get_guild
 from utilities.post_utils import Post, Posts
@@ -36,6 +37,7 @@ class BasePollerCog(commands.Cog):
         self._poll_task = None
         self.consecutive_failures = 0
         self.owner_notified = False
+        self._current_cycle_task: Optional[asyncio.Task] = None
 
     async def cog_load(self):
         """Start the polling task when the cog loads"""
@@ -45,6 +47,9 @@ class BasePollerCog(commands.Cog):
         """Cancel the polling task when the cog unloads"""
         if self._poll_task:
             self._poll_task.cancel()
+        if self._current_cycle_task:
+            self._current_cycle_task.cancel()
+            self._current_cycle_task = None
 
     async def fetch_latest_posts(self, search_criteria: str) -> Posts:
         """
@@ -258,22 +263,50 @@ class BasePollerCog(commands.Cog):
     async def poll_loop(self):
         """Main polling loop that runs continuously"""
         while True:
-            interval_minutes = self.calculate_poll_interval()
+            interval_minutes = await asyncio.to_thread(self.calculate_poll_interval)
             self.logger.debug(
                 f"Polling {self.service_type} every {interval_minutes} minutes"
             )
 
-            try:
-                await self.poll_task_once()
-            except Exception as e:
-                self.logger.error(
-                    f"Unhandled exception in poll_task_once: {e}", exc_info=True
-                )
+            self._schedule_poll_cycle()
 
             self.logger.debug(
                 f"{self.service_type} poller cycle complete. Waiting {interval_minutes} minutes to run again."
             )
             await asyncio.sleep(interval_minutes * 60)
+
+    def _schedule_poll_cycle(self):
+        if self._current_cycle_task and not self._current_cycle_task.done():
+            self.logger.debug(
+                f"Previous {self.service_type} poll cycle still running; skipping new cycle scheduling."
+            )
+            return
+
+        self._current_cycle_task = asyncio.create_task(
+            self._run_poll_cycle(), name=f"{self.service_type}_poll_cycle"
+        )
+        self._current_cycle_task.add_done_callback(self._handle_cycle_completion)
+
+    async def _run_poll_cycle(self):
+        try:
+            await self.poll_task_once()
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            self.logger.error(
+                f"Unhandled exception in poll_task_once: {e}", exc_info=True
+            )
+
+    def _handle_cycle_completion(self, task: asyncio.Task):
+        try:
+            task.result()
+        except asyncio.CancelledError:
+            self.logger.debug(f"{self.service_type} poll cycle cancelled.")
+        except Exception as e:
+            self.logger.error(
+                f"{self.service_type} poll cycle completed with error: {e}",
+                exc_info=True,
+            )
 
     def calculate_poll_interval(self) -> int:
         """Calculate the polling interval based on number of subscriptions"""
@@ -293,185 +326,252 @@ class BasePollerCog(commands.Cog):
             self.logger.error(f"Error calculating poll interval: {e}")
             return 5
 
+    @dataclass
+    class SubscriptionSnapshot:
+        id: int
+        user_id: Optional[int]
+        channel_id: Optional[int]
+        guild_id: Optional[int]
+        search_criteria: str
+        service_type: str
+        filters: Optional[str]
+        last_reported_id: Optional[str]
+        last_ran: Optional[int]
+        is_pm: bool
+
     async def poll_task_once(self):
         """Single polling cycle - implemented by subclasses"""
         self.logger.debug(f"Running {self.service_type} poller")
 
+        load_result = await asyncio.to_thread(self._load_oldest_subscription_group)
+        if not load_result:
+            self.logger.debug(f"No {self.service_type} subscriptions to process.")
+            return
+
+        search_criteria, oldest_group = load_result
+        self.logger.debug(
+            f"Selected group '{search_criteria}' with {len(oldest_group)} subscriptions."
+        )
+
+        # Fetch latest posts for this search criteria
+        try:
+            posts = await self.fetch_latest_posts(search_criteria)
+            if self.consecutive_failures > 0:
+                self.logger.info(
+                    f"{self.service_type} API call successful, resetting failure counter from {self.consecutive_failures}"
+                )
+                self.consecutive_failures = 0
+                self.owner_notified = False
+
+        except Exception as e:
+            await self._handle_api_failure(oldest_group, search_criteria, e)
+            return
+
+        if not posts:
+            self.logger.warning(f"No posts found for {search_criteria}.")
+            now = int(time.time())
+            await asyncio.to_thread(
+                self._persist_subscription_updates,
+                [(sub.id, {"last_ran": now}) for sub in oldest_group],
+            )
+            self.logger.debug(
+                f"Marked {len(oldest_group)} subscriptions as checked after empty result."
+            )
+            return
+
+        now = int(time.time())
+        self.logger.debug(f"Latest post IDs for '{search_criteria}': {posts.ids}")
+
+        guild_cache: Dict[int, Optional[object]] = {}
+        updates = []
+
+        for sub in oldest_group:
+            self.logger.debug(
+                f"Processing Subscription {sub.id} ({sub.search_criteria}) (user {sub.user_id}, channel {sub.channel_id})"
+            )
+
+            is_pm = getattr(sub, "is_pm", False)
+            if sub.guild_id is not None and not is_pm:
+                if sub.guild_id not in guild_cache:
+                    guild_cache[sub.guild_id] = get_guild(sub.guild_id)
+                guild_settings = guild_cache[sub.guild_id]
+                if not guild_settings or not guild_settings.nsfw():
+                    guild_log_info(
+                        self.logger,
+                        sub.guild_id,
+                        f"Skipping Subscription {sub.id} ({sub.search_criteria}) because NSFW is disabled",
+                    )
+                    updates.append((sub.id, {"last_ran": now}))
+                    continue
+
+            posts_to_process, action, reason = self.determine_posts_to_process(
+                sub, posts
+            )
+
+            if action == "skip":
+                self.logger.debug(
+                    f"Subscription {sub.id} ({sub.search_criteria}): {reason}"
+                )
+                updates.append((sub.id, {"last_ran": now}))
+                continue
+            elif action == "catchup":
+                guild_log_warning(
+                    self.logger,
+                    sub.guild_id,
+                    f"Subscription {sub.id} ({sub.search_criteria}): {reason}",
+                )
+                updates.append(
+                    (
+                        sub.id,
+                        {"last_reported_id": posts_to_process[0].id, "last_ran": now},
+                    )
+                )
+                continue
+            elif action == "post":
+                guild_log_info(
+                    self.logger,
+                    sub.guild_id,
+                    f"Subscription {sub.id} ({sub.search_criteria}): {reason} - processing {len(posts_to_process)} posts",
+                )
+
+                last_successful_post = None
+                for post in posts_to_process:
+                    guild_log_info(
+                        self.logger,
+                        sub.guild_id,
+                        f"Processing post {post.id} for sub {sub.id}",
+                    )
+
+                    post_success = await self.process_single_post(sub, post)
+
+                    if post_success:
+                        last_successful_post = post
+                        guild_log_info(
+                            self.logger,
+                            sub.guild_id,
+                            f"Successfully processed {post.id} for sub {sub.id}",
+                        )
+                        send_metric(
+                            "auto_post",
+                            sub.guild_id or 0,
+                            sub_id=str(sub.id),
+                            post_id=str(post.id),
+                        )
+                    else:
+                        guild_log_warning(
+                            self.logger,
+                            sub.guild_id,
+                            f"Failed to post {post.id} for sub {sub.id}",
+                        )
+
+                if not posts_to_process:
+                    updates.append((sub.id, {"last_ran": now}))
+                    continue
+
+                if last_successful_post:
+                    updates.append(
+                        (
+                            sub.id,
+                            {
+                                "last_reported_id": last_successful_post.id,
+                                "last_ran": now,
+                            },
+                        )
+                    )
+                else:
+                    updates.append(
+                        (
+                            sub.id,
+                            {
+                                "last_reported_id": posts_to_process[-1].id,
+                                "last_ran": now,
+                            },
+                        )
+                    )
+
+        if updates:
+            await asyncio.to_thread(self._persist_subscription_updates, updates)
+            self.logger.debug(
+                f"Committed updates for {len(updates)} subscriptions in group '{search_criteria}'."
+            )
+
+    def _load_oldest_subscription_group(self):
+        from collections import defaultdict
+
         with get_session() as session:
-            # Load subscriptions for this service type
             subs = (
                 session.query(Subscription)
                 .filter_by(service_type=self.service_type)
                 .all()
             )
-            self.logger.debug(f"Loaded {len(subs)} {self.service_type} subscriptions.")
-            if not subs:
-                return
 
-            # Group subscriptions by search criteria
-            from collections import defaultdict
+            if not subs:
+                return None
 
             groups = defaultdict(list)
             for sub in subs:
-                groups[sub.search_criteria].append(sub)
-            self.logger.debug(f"Grouped into {len(groups)} search criteria groups.")
+                snapshot = self.SubscriptionSnapshot(
+                    id=sub.id,
+                    user_id=sub.user_id,
+                    channel_id=sub.channel_id,
+                    guild_id=sub.guild_id,
+                    search_criteria=sub.search_criteria,
+                    service_type=sub.service_type,
+                    filters=sub.filters,
+                    last_reported_id=(
+                        str(sub.last_reported_id)
+                        if sub.last_reported_id is not None
+                        else None
+                    ),
+                    last_ran=sub.last_ran,
+                    is_pm=getattr(sub, "is_pm", False),
+                )
+                groups[sub.search_criteria].append(snapshot)
 
-            # Select group to process (oldest last_ran)
             def group_last_ran(group):
                 times = [s.last_ran or 0 for s in group]
                 return min(times) if times else 0
 
             oldest_group = min(groups.values(), key=group_last_ran)
             search_criteria = oldest_group[0].search_criteria
-            self.logger.debug(
-                f"Selected group '{search_criteria}' with {len(oldest_group)} subscriptions."
-            )
+            return search_criteria, oldest_group
 
-            # Fetch latest posts for this search criteria
-            try:
-                posts = await self.fetch_latest_posts(search_criteria)
-                # Reset failure counter on successful fetch
-                if self.consecutive_failures > 0:
-                    self.logger.info(
-                        f"{self.service_type} API call successful, resetting failure counter from {self.consecutive_failures}"
-                    )
-                    self.consecutive_failures = 0
-                    self.owner_notified = False
+    def _persist_subscription_updates(
+        self, updates: List[Tuple[int, Dict[str, object]]]
+    ):
+        if not updates:
+            return
 
-                # Update the last poll timestamp for FA
-                if self.service_type == "FurAffinity":
-                    now = int(time.time())
-                    kv = session.get(KeyValueStore, "fa_last_poll")
-                    if kv:
-                        kv.value = str(now)
-                    else:
-                        kv = KeyValueStore(key="fa_last_poll", value=str(now))
-                        session.add(kv)
-            except Exception as e:
-                self.consecutive_failures += 1
-                self.logger.warning(
-                    f"{self.service_type} API error for {search_criteria}: {e} (failure #{self.consecutive_failures})"
-                )
+        ids = [sub_id for sub_id, _ in updates]
+        update_map = {sub_id: fields for sub_id, fields in updates}
 
-                # Check if we should notify the owner
-                if self.consecutive_failures >= 5:
-                    await self.notify_owner_of_failures(search_criteria, e)
-
-                now = int(time.time())
-                for sub in oldest_group:
-                    sub.last_ran = now
-                session.commit()
-                self.logger.debug(
-                    f"Marked {len(oldest_group)} subscriptions as checked after error."
-                )
-                return
-
-            if not posts:
-                self.logger.warning(f"No posts found for {search_criteria}.")
-                now = int(time.time())
-                for sub in oldest_group:
-                    sub.last_ran = now
-                session.commit()
-                self.logger.debug(
-                    f"Marked {len(oldest_group)} subscriptions as checked after empty result."
-                )
-                return
-
-            now = int(time.time())
-            self.logger.debug(f"Latest post IDs for '{search_criteria}': {posts.ids}")
-
-            guild_cache = {}
-
-            for sub in oldest_group:
-                self.logger.debug(
-                    f"Processing subscription {sub.id} (user {sub.user_id}, channel {sub.channel_id})"
-                )
-
-                is_pm = getattr(sub, "is_pm", False)
-                if sub.guild_id is not None and not is_pm:
-                    if sub.guild_id not in guild_cache:
-                        guild_cache[sub.guild_id] = get_guild(sub.guild_id)
-                    guild_settings = guild_cache[sub.guild_id]
-                    if not guild_settings or not guild_settings.nsfw():
-                        guild_log_info(
-                            self.logger,
-                            sub.guild_id,
-                            f"Skipping subscription {sub.id} because NSFW is disabled",
-                        )
-                        sub.last_ran = now
-                        continue
-
-                # Determine what to do with this subscription
-                posts_to_process, action, reason = self.determine_posts_to_process(
-                    sub, posts
-                )
-
-                if action == "skip":
-                    self.logger.debug(f"Subscription {sub.id}: {reason}")
-                    sub.last_ran = now
-                    continue
-                elif action == "catchup":
-                    guild_log_warning(
-                        self.logger,
-                        sub.guild_id,
-                        f"Subscription {sub.id}: {reason}",
-                    )
-                    sub.last_reported_id = posts_to_process[0].id
-                    sub.last_ran = now
-                    continue
-                elif action == "post":
-                    guild_log_info(
-                        self.logger,
-                        sub.guild_id,
-                        f"Subscription {sub.id}: {reason} - processing {len(posts_to_process)} posts",
-                    )
-
-                    # Process posts in order (oldest first)
-                    last_successful_post = None
-                    for post in posts_to_process:
-                        guild_log_info(
-                            self.logger,
-                            sub.guild_id,
-                            f"Processing post {post.id} for sub {sub.id}",
-                        )
-
-                        # Process the post
-                        post_success = await self.process_single_post(sub, post)
-
-                        if post_success:
-                            last_successful_post = post
-                            guild_log_info(
-                                self.logger,
-                                sub.guild_id,
-                                f"Successfully processed {post.id} for sub {sub.id}",
-                            )
-
-                            # Track automatic post in InfluxDB
-                            send_metric(
-                                "auto_post",
-                                sub.guild_id or 0,
-                                sub_id=str(sub.id),
-                                post_id=str(post.id),
-                            )
-                        else:
-                            guild_log_warning(
-                                self.logger,
-                                sub.guild_id,
-                                f"Failed to post {post.id} for sub {sub.id}",
-                            )
-
-                    # CRITICAL: Always update the subscription to the last post we attempted
-                    # This prevents infinite reposting loops
-                    if last_successful_post:
-                        sub.last_reported_id = last_successful_post.id
-                    else:
-                        # If all posts failed, still update to the last one we tried
-                        sub.last_reported_id = posts_to_process[-1].id
-
-                    sub.last_ran = now
-
-            # Commit all updates for this group
+        with get_session() as session:
+            db_subs = session.query(Subscription).filter(Subscription.id.in_(ids)).all()
+            for db_sub in db_subs:
+                fields = update_map.get(db_sub.id, {})
+                for key, value in fields.items():
+                    setattr(db_sub, key, value)
             session.commit()
-            self.logger.debug(
-                f"Committed updates for {len(oldest_group)} subscriptions in group '{search_criteria}'."
-            )
+
+    async def _handle_api_failure(
+        self,
+        oldest_group: List["BasePollerCog.SubscriptionSnapshot"],
+        search_criteria: str,
+        error: Exception,
+    ):
+        self.consecutive_failures += 1
+        self.logger.warning(
+            f"{self.service_type} API error for {search_criteria}: {error} (failure #{self.consecutive_failures})"
+        )
+
+        if self.consecutive_failures >= 5:
+            await self.notify_owner_of_failures(search_criteria, error)
+
+        now = int(time.time())
+        await asyncio.to_thread(
+            self._persist_subscription_updates,
+            [(sub.id, {"last_ran": now}) for sub in oldest_group],
+        )
+        self.logger.debug(
+            f"Marked {len(oldest_group)} subscriptions as checked after error."
+        )

@@ -1,4 +1,5 @@
 import io
+import asyncio
 import discord
 import logging
 
@@ -40,7 +41,7 @@ class TaskSelectView(discord.ui.View):
     async def on_select(self, interaction: discord.Interaction):
         """Handle task selection."""
         task_name = self.select.values[0]
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True, thinking=True)
 
         cog = interaction.client.get_cog("ImageCog")
         if cog:
@@ -77,6 +78,8 @@ class ImageCog(commands.Cog, name="ImageCog"):
         self, interaction: discord.Interaction, message: discord.Message
     ):
         """Show modal with task selection for image tasks."""
+        await interaction.response.defer(ephemeral=True, thinking=True)
+
         # Get tasks that require attachments
         tasks = [
             name
@@ -85,13 +88,11 @@ class ImageCog(commands.Cog, name="ImageCog"):
         ]
 
         if not tasks:
-            await interaction.response.send_message(
-                "No image tasks available.", ephemeral=True
-            )
+            await interaction.followup.send("No image tasks available.", ephemeral=True)
             return
 
         view = TaskSelectView(tasks, requires_attachment=True, message=message)
-        await interaction.response.send_message(
+        await interaction.followup.send(
             "Select an image tool:", view=view, ephemeral=True
         )
 
@@ -99,6 +100,8 @@ class ImageCog(commands.Cog, name="ImageCog"):
         self, interaction: discord.Interaction, message: discord.Message
     ):
         """Show modal with task selection for text tasks."""
+        await interaction.response.defer(ephemeral=True, thinking=True)
+
         # Get tasks that don't require attachments
         tasks = [
             name
@@ -107,13 +110,11 @@ class ImageCog(commands.Cog, name="ImageCog"):
         ]
 
         if not tasks:
-            await interaction.response.send_message(
-                "No text tasks available.", ephemeral=True
-            )
+            await interaction.followup.send("No text tasks available.", ephemeral=True)
             return
 
         view = TaskSelectView(tasks, requires_attachment=False, message=message)
-        await interaction.response.send_message(
+        await interaction.followup.send(
             "Select a text tool:", view=view, ephemeral=True
         )
 
@@ -140,7 +141,7 @@ class ImageCog(commands.Cog, name="ImageCog"):
 
         # Only defer if not already done (for direct calls, not select callbacks)
         if not interaction.response.is_done():
-            await interaction.response.defer()
+            await interaction.response.defer(ephemeral=True, thinking=True)
 
         try:
             if requires_attachment:
@@ -158,8 +159,12 @@ class ImageCog(commands.Cog, name="ImageCog"):
                     return
 
                 image_bytes = await attachment.read()
-                input_image = load_image_from_bytes(image_bytes)
-                output_image = apply_image_task(task_name, input_image)
+                input_image = await asyncio.to_thread(
+                    load_image_from_bytes, image_bytes
+                )
+                output_image = await asyncio.to_thread(
+                    apply_image_task, task_name, input_image
+                )
             else:
                 if not message or not message.content:
                     await interaction.followup.send(
@@ -167,14 +172,29 @@ class ImageCog(commands.Cog, name="ImageCog"):
                     )
                     return
 
-                output_image = apply_image_task(task_name, message.content)
+                output_image = await asyncio.to_thread(
+                    apply_image_task, task_name, message.content
+                )
 
-            output_bytes = save_image_to_bytes(output_image)
-            await interaction.followup.send(
-                file=discord.File(io.BytesIO(output_bytes), f"{task_name}.png")
-            )
+            output_bytes = await asyncio.to_thread(save_image_to_bytes, output_image)
+
+            # Reply to the original message
+            if message and hasattr(message, "reference") and message.reference:
+                target_message = await message.channel.fetch_message(
+                    message.reference.message_id
+                )
+
+                await target_message.reply(
+                    file=discord.File(io.BytesIO(output_bytes), f"{task_name}.png")
+                )
+            else:
+                self.logger.error(f"No reference message found for {message.id}")
+                await interaction.followup.send(
+                    file=discord.File(io.BytesIO(output_bytes), f"{task_name}.png")
+                )
         except Exception as e:
             self.logger.error(f"Error processing task '{task_name}': {e}")
+
             await interaction.followup.send(
                 "Failed to process the task.", ephemeral=True
             )
