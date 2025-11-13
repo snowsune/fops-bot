@@ -154,6 +154,7 @@ class FopsBot:
         @self.bot.event
         async def on_disconnect():
             from utilities.influx_metrics import close_client
+
             close_client()
 
         # Run the discord bot using our token.
@@ -163,12 +164,13 @@ class FopsBot:
         # Set up signal handlers for graceful shutdown
         def signal_handler(signum, frame):
             from utilities.influx_metrics import close_client
+
             close_client()
             sys.exit(0)
-        
+
         signal.signal(signal.SIGINT, signal_handler)
         signal.signal(signal.SIGTERM, signal_handler)
-        
+
         asyncio.run(self.start_bot())
 
 

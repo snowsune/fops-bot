@@ -308,7 +308,6 @@ class YTDLP(commands.Cog):
 
                 # Track job timeout in InfluxDB
                 send_metric("ytdlp_job_timeout", message.guild.id, message.guild.name)
-                await self.send_error_to_admin(message, "Download timed out")
 
         except Exception as e:
             guild_log_warning(self.logger, guild_id, f"yt-dlp Redis error: {e}")

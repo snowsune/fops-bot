@@ -183,11 +183,35 @@ class HoleUserColor(Base):
 
 
 # Database connection setup
-def get_engine():
+def get_database_url():
+    """
+    Get the database URL from environment variables or default to SQLite.
+    """
     db_url = os.getenv("DATABASE_URL")
+
+    # Use local SQLITE if DATABASE_URL omitted
     if not db_url:
-        raise RuntimeError("DATABASE_URL environment variable is not set!")
-    return create_engine(db_url)
+        # Create data directory if it doesn't exist
+        import pathlib
+
+        data_dir = pathlib.Path(__file__).parent.parent / "data"
+        data_dir.mkdir(exist_ok=True)
+        db_path = data_dir / "fops_bot.db"
+        db_url = f"sqlite:///{db_path}"
+        logging.info(f"Using SQLite database for local testing: {db_path}")
+
+    return db_url
+
+
+def get_engine():
+    """Get a SQLAlchemy engine from the database URL."""
+    db_url = get_database_url()
+
+    # SQLite-specific engine configuration
+    if db_url.startswith("sqlite:///"):
+        return create_engine(db_url, connect_args={"check_same_thread": False})
+    else:
+        return create_engine(db_url)
 
 
 def get_session():

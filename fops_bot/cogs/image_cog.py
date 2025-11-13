@@ -1,4 +1,5 @@
 import io
+import asyncio
 import discord
 import logging
 
@@ -27,6 +28,7 @@ class TaskSelectView(discord.ui.View):
         self.tasks = tasks
         self.requires_attachment = requires_attachment
         self.message = message
+        self.followup_message: Optional[discord.Message] = None
 
         # Add select dropdown
         options = [discord.SelectOption(label=task, value=task) for task in tasks]
@@ -40,11 +42,19 @@ class TaskSelectView(discord.ui.View):
     async def on_select(self, interaction: discord.Interaction):
         """Handle task selection."""
         task_name = self.select.values[0]
-        await interaction.response.defer()
+
+        # Remove the dropdown view to acknowledge the interaction without showing "thinking..."
+        # This responds to the interaction by editing the message
+        await interaction.response.edit_message(view=None)
+
+        # The followup message (dropdown) that we'll delete after processing
+        thinking_msg = self.followup_message
 
         cog = interaction.client.get_cog("ImageCog")
         if cog:
-            await cog.process_image_task(interaction, task_name, self.message)
+            await cog.process_image_task(
+                interaction, task_name, self.message, thinking_msg
+            )
         else:
             await interaction.followup.send(
                 "Error: ImageCog not found.", ephemeral=True
@@ -77,6 +87,8 @@ class ImageCog(commands.Cog, name="ImageCog"):
         self, interaction: discord.Interaction, message: discord.Message
     ):
         """Show modal with task selection for image tasks."""
+        await interaction.response.defer(ephemeral=True, thinking=True)
+
         # Get tasks that require attachments
         tasks = [
             name
@@ -85,20 +97,21 @@ class ImageCog(commands.Cog, name="ImageCog"):
         ]
 
         if not tasks:
-            await interaction.response.send_message(
-                "No image tasks available.", ephemeral=True
-            )
+            await interaction.followup.send("No image tasks available.", ephemeral=True)
             return
 
         view = TaskSelectView(tasks, requires_attachment=True, message=message)
-        await interaction.response.send_message(
+        followup_msg = await interaction.followup.send(
             "Select an image tool:", view=view, ephemeral=True
         )
+        view.followup_message = followup_msg
 
     async def show_text_modal(
         self, interaction: discord.Interaction, message: discord.Message
     ):
         """Show modal with task selection for text tasks."""
+        await interaction.response.defer(ephemeral=True, thinking=True)
+
         # Get tasks that don't require attachments
         tasks = [
             name
@@ -107,21 +120,21 @@ class ImageCog(commands.Cog, name="ImageCog"):
         ]
 
         if not tasks:
-            await interaction.response.send_message(
-                "No text tasks available.", ephemeral=True
-            )
+            await interaction.followup.send("No text tasks available.", ephemeral=True)
             return
 
         view = TaskSelectView(tasks, requires_attachment=False, message=message)
-        await interaction.response.send_message(
+        followup_msg = await interaction.followup.send(
             "Select a text tool:", view=view, ephemeral=True
         )
+        view.followup_message = followup_msg
 
     async def process_image_task(
         self,
         interaction: discord.Interaction,
         task_name: str,
         message: Optional[discord.Message] = None,
+        thinking_message: Optional[discord.Message] = None,
     ):
         """Process the image using the selected task."""
         task_metadata = IMAGE_TASKS.get(task_name)
@@ -140,7 +153,7 @@ class ImageCog(commands.Cog, name="ImageCog"):
 
         # Only defer if not already done (for direct calls, not select callbacks)
         if not interaction.response.is_done():
-            await interaction.response.defer()
+            await interaction.response.defer(ephemeral=True, thinking=True)
 
         try:
             if requires_attachment:
@@ -158,8 +171,12 @@ class ImageCog(commands.Cog, name="ImageCog"):
                     return
 
                 image_bytes = await attachment.read()
-                input_image = load_image_from_bytes(image_bytes)
-                output_image = apply_image_task(task_name, input_image)
+                input_image = await asyncio.to_thread(
+                    load_image_from_bytes, image_bytes
+                )
+                output_image = await asyncio.to_thread(
+                    apply_image_task, task_name, input_image
+                )
             else:
                 if not message or not message.content:
                     await interaction.followup.send(
@@ -167,14 +184,33 @@ class ImageCog(commands.Cog, name="ImageCog"):
                     )
                     return
 
-                output_image = apply_image_task(task_name, message.content)
+                output_image = await asyncio.to_thread(
+                    apply_image_task, task_name, message.content
+                )
 
-            output_bytes = save_image_to_bytes(output_image)
-            await interaction.followup.send(
-                file=discord.File(io.BytesIO(output_bytes), f"{task_name}.png")
-            )
+            output_bytes = await asyncio.to_thread(save_image_to_bytes, output_image)
+
+            # Reply to the original message that was right-clicked
+            # The 'message' parameter is the message from the context menu interaction
+            if message:
+                await message.reply(
+                    file=discord.File(io.BytesIO(output_bytes), f"{task_name}.png")
+                )
+            else:
+                self.logger.error(f"No message provided for interaction")
+                await interaction.followup.send(
+                    file=discord.File(io.BytesIO(output_bytes), f"{task_name}.png")
+                )
+
+            # Delete the "thinking..." message if it exists
+            if thinking_message:
+                try:
+                    await thinking_message.delete()
+                except Exception as e:
+                    self.logger.warning(f"Failed to delete thinking message: {e}")
         except Exception as e:
             self.logger.error(f"Error processing task '{task_name}': {e}")
+
             await interaction.followup.send(
                 "Failed to process the task.", ephemeral=True
             )

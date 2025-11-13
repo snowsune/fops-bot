@@ -7,7 +7,7 @@ import asyncio
 from dataclasses import dataclass
 from typing import List
 
-from fops_bot.models import get_session, Subscription
+from fops_bot.models import get_session, Subscription, KeyValueStore
 from requests.cookies import RequestsCookieJar
 from cogs.subscribe_resources.base_poller import BasePollerCog
 from utilities.post_utils import Post, Posts
@@ -108,7 +108,23 @@ class FA_PollerCog(BasePollerCog):
             )
             return fa_posts_collection
 
-        return await asyncio.to_thread(fetch_posts)
+        posts = await asyncio.to_thread(fetch_posts)
+
+        # Update the last poll timestamp after a successful fetch attempt
+        now = int(time.time())
+        await asyncio.to_thread(self._update_last_poll_timestamp, now)
+
+        return posts
+
+    def _update_last_poll_timestamp(self, timestamp: int) -> None:
+        with get_session() as session:
+            kv = session.get(KeyValueStore, "fa_last_poll")
+            if kv:
+                kv.value = str(timestamp)
+            else:
+                kv = KeyValueStore(key="fa_last_poll", value=str(timestamp))
+                session.add(kv)
+            session.commit()
 
     async def notify_owner_of_failures(self, search_criteria: str, error: Exception):
         """Notify me when FA poller encounters 5 consecutive failures"""
