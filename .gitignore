@@ -132,3 +132,8 @@ dmypy.json
 Pipfile*
 .vscode
 .local
+
+# Local SQLite database for testing
+fops_bot/data/
+*.db
+*.db-journal

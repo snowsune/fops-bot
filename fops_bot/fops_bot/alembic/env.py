@@ -11,7 +11,7 @@ import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from fops_bot.models import Base
+from fops_bot.models import Base, get_database_url
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -32,13 +32,6 @@ target_metadata = Base.metadata
 # ... etc.
 
 
-def get_url():
-    url = os.getenv("DATABASE_URL")
-    if url:
-        return url
-    return f"postgresql://{os.getenv('DB_USER')}:{os.getenv('DB_PASS')}@{os.getenv('DB_HOST')}:{os.getenv('DB_PORT')}/{os.getenv('DB_NAME')}"
-
-
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode.
 
@@ -51,7 +44,7 @@ def run_migrations_offline() -> None:
     script output.
 
     """
-    url = get_url()
+    url = get_database_url()
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -71,7 +64,7 @@ def run_migrations_online() -> None:
 
     """
     configuration: Dict[str, Any] = config.get_section(config.config_ini_section) or {}
-    configuration["sqlalchemy.url"] = get_url()
+    configuration["sqlalchemy.url"] = get_database_url()
 
     connectable = engine_from_config(
         configuration,

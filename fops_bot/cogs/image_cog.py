@@ -28,6 +28,7 @@ class TaskSelectView(discord.ui.View):
         self.tasks = tasks
         self.requires_attachment = requires_attachment
         self.message = message
+        self.followup_message: Optional[discord.Message] = None
 
         # Add select dropdown
         options = [discord.SelectOption(label=task, value=task) for task in tasks]
@@ -41,11 +42,19 @@ class TaskSelectView(discord.ui.View):
     async def on_select(self, interaction: discord.Interaction):
         """Handle task selection."""
         task_name = self.select.values[0]
-        await interaction.response.defer(ephemeral=True, thinking=True)
+
+        # Remove the dropdown view to acknowledge the interaction without showing "thinking..."
+        # This responds to the interaction by editing the message
+        await interaction.response.edit_message(view=None)
+
+        # The followup message (dropdown) that we'll delete after processing
+        thinking_msg = self.followup_message
 
         cog = interaction.client.get_cog("ImageCog")
         if cog:
-            await cog.process_image_task(interaction, task_name, self.message)
+            await cog.process_image_task(
+                interaction, task_name, self.message, thinking_msg
+            )
         else:
             await interaction.followup.send(
                 "Error: ImageCog not found.", ephemeral=True
@@ -92,9 +101,10 @@ class ImageCog(commands.Cog, name="ImageCog"):
             return
 
         view = TaskSelectView(tasks, requires_attachment=True, message=message)
-        await interaction.followup.send(
+        followup_msg = await interaction.followup.send(
             "Select an image tool:", view=view, ephemeral=True
         )
+        view.followup_message = followup_msg
 
     async def show_text_modal(
         self, interaction: discord.Interaction, message: discord.Message
@@ -114,15 +124,17 @@ class ImageCog(commands.Cog, name="ImageCog"):
             return
 
         view = TaskSelectView(tasks, requires_attachment=False, message=message)
-        await interaction.followup.send(
+        followup_msg = await interaction.followup.send(
             "Select a text tool:", view=view, ephemeral=True
         )
+        view.followup_message = followup_msg
 
     async def process_image_task(
         self,
         interaction: discord.Interaction,
         task_name: str,
         message: Optional[discord.Message] = None,
+        thinking_message: Optional[discord.Message] = None,
     ):
         """Process the image using the selected task."""
         task_metadata = IMAGE_TASKS.get(task_name)
@@ -178,20 +190,24 @@ class ImageCog(commands.Cog, name="ImageCog"):
 
             output_bytes = await asyncio.to_thread(save_image_to_bytes, output_image)
 
-            # Reply to the original message
-            if message and hasattr(message, "reference") and message.reference:
-                target_message = await message.channel.fetch_message(
-                    message.reference.message_id
-                )
-
-                await target_message.reply(
+            # Reply to the original message that was right-clicked
+            # The 'message' parameter is the message from the context menu interaction
+            if message:
+                await message.reply(
                     file=discord.File(io.BytesIO(output_bytes), f"{task_name}.png")
                 )
             else:
-                self.logger.error(f"No reference message found for {message.id}")
+                self.logger.error(f"No message provided for interaction")
                 await interaction.followup.send(
                     file=discord.File(io.BytesIO(output_bytes), f"{task_name}.png")
                 )
+
+            # Delete the "thinking..." message if it exists
+            if thinking_message:
+                try:
+                    await thinking_message.delete()
+                except Exception as e:
+                    self.logger.warning(f"Failed to delete thinking message: {e}")
         except Exception as e:
             self.logger.error(f"Error processing task '{task_name}': {e}")
 
