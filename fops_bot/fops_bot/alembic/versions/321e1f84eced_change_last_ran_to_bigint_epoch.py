@@ -43,13 +43,16 @@ def upgrade() -> None:
             sa.Column("last_reported_id", sa.String(), nullable=True),
             sa.Column("filters", sa.String(), nullable=True),
             sa.Column("is_pm", sa.Boolean(), nullable=False, server_default=sa.false()),
-            sa.Column("last_ran", sa.BigInteger(), nullable=True),  # Changed to BigInteger
+            sa.Column(
+                "last_ran", sa.BigInteger(), nullable=True
+            ),  # Changed to BigInteger
             sa.PrimaryKeyConstraint("id"),
         )
 
         # Copy data, converting DateTime to epoch timestamp (Unix timestamp)
         # SQLite stores DateTime as strings, so we use strftime to convert to epoch
-        op.execute("""
+        op.execute(
+            """
             INSERT INTO subscriptions_new 
             (id, service_type, user_id, subscribed_at, guild_id, channel_id, 
              search_criteria, last_reported_id, filters, is_pm, last_ran)
@@ -61,7 +64,8 @@ def upgrade() -> None:
                     ELSE CAST(strftime('%s', last_ran) AS INTEGER)
                 END
             FROM subscriptions
-        """)
+        """
+        )
 
         # Drop old table and rename new one
         op.drop_table("subscriptions")
@@ -101,12 +105,15 @@ def downgrade() -> None:
             sa.Column("last_reported_id", sa.String(), nullable=True),
             sa.Column("filters", sa.String(), nullable=True),
             sa.Column("is_pm", sa.Boolean(), nullable=False, server_default=sa.false()),
-            sa.Column("last_ran", sa.DateTime(), nullable=True),  # Changed back to DateTime
+            sa.Column(
+                "last_ran", sa.DateTime(), nullable=True
+            ),  # Changed back to DateTime
             sa.PrimaryKeyConstraint("id"),
         )
 
         # Copy data, converting epoch timestamp to DateTime
-        op.execute("""
+        op.execute(
+            """
             INSERT INTO subscriptions_new 
             (id, service_type, user_id, subscribed_at, guild_id, channel_id, 
              search_criteria, last_reported_id, filters, is_pm, last_ran)
@@ -118,7 +125,8 @@ def downgrade() -> None:
                     ELSE datetime(last_ran, 'unixepoch')
                 END
             FROM subscriptions
-        """)
+        """
+        )
 
         op.drop_table("subscriptions")
         op.rename_table("subscriptions_new", "subscriptions")
