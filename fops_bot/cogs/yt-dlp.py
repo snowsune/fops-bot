@@ -63,8 +63,18 @@ async def submit_yt_dlp_job(url):
     job_id = str(uuid.uuid4())
     job_data = {"job_id": job_id, "url": url}
 
+    # Try to submit the job
     if redis_client.publish_job("ytdlp:jobs", job_data):
         return job_id
+
+    # If submission failed, re-initialize the connection and try once more
+    logging.warning("Job submission failed, re-initializing Redis connection")
+    redis_client.reinitialize()
+
+    # Retry after re-initialization
+    if redis_client.publish_job("ytdlp:jobs", job_data):
+        return job_id
+
     return None
 
 

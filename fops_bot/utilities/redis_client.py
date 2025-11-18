@@ -67,6 +67,18 @@ class RedisClient:
                     continue
                 raise
 
+    def reinitialize(self):
+        """Force re-initialize the Redis connection."""
+        logger.info("Re-initializing Redis connection")
+        self._client = None
+        try:
+            self._connect()
+            self._client.ping()
+            logger.info("Redis connection re-initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to re-initialize Redis connection: {e}")
+            self._client = None
+
     def test_connection(self) -> bool:
         """Test Redis connection."""
         try:
