@@ -88,12 +88,27 @@ class RedisClient:
             return False
 
     def publish_job(self, channel: str, job_data: Dict[str, Any]) -> bool:
-        """Publish job to Redis channel."""
+        """Publish job to Redis channel. Reinitializes connection on failure."""
+        # Try once
         try:
-            result = self._call(lambda c: c.publish(channel, json.dumps(job_data)))
+            self._ensure_connected()
+            result = self._client.publish(channel, json.dumps(job_data))
+            if result > 0:
+                return True
+        except Exception as e:
+            logger.warning(f"Publish failed: {e}")
+
+        # If we get here, it failed - reinitialize and try once more
+        logger.info("Re-initializing Redis connection and retrying publish")
+        self._client = None
+        try:
+            self._connect()
+            self._client.ping()
+            result = self._client.publish(channel, json.dumps(job_data))
             return result > 0
         except Exception as e:
-            logger.error(f"Failed to publish: {e}")
+            logger.error(f"Failed to publish after reinitialize: {e}")
+            self._client = None
             return False
 
     def set_job_status(
