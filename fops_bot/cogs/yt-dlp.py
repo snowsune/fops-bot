@@ -118,18 +118,46 @@ async def wait_for_job_completion(job_id, timeout=300):
 async def download_yt_dlp_result(job_id, temp_file_path):
     """Download result file from yt-dlp service"""
     status_data = redis_client.get_job_status(job_id)
-    if not status_data or status_data.get("status") != "done":
+    if not status_data:
+        logging.warning(f"Job {job_id}: No status data found in Redis")
+        return None
+
+    status = status_data.get("status")
+    if status != "done":
+        logging.warning(f"Job {job_id}: Status is '{status}', expected 'done'")
         return None
 
     result_path = status_data.get("result_path")
-    if not result_path or not os.path.exists(result_path):
+    if not result_path:
+        logging.warning(
+            f"Job {job_id}: No result_path in status data. Status data: {status_data}"
+        )
+        return None
+
+    if not os.path.exists(result_path):
+        logging.warning(f"Job {job_id}: Result file does not exist at {result_path}")
+        # Check if directory exists
+        result_dir = os.path.dirname(result_path)
+        if os.path.exists(result_dir):
+            logging.info(
+                f"Job {job_id}: Directory exists, listing contents: {os.listdir(result_dir)}"
+            )
+        else:
+            logging.warning(f"Job {job_id}: Directory does not exist: {result_dir}")
         return None
 
     # Copy file to temp location
     import shutil
 
-    shutil.copy2(result_path, temp_file_path)
-    return temp_file_path
+    try:
+        shutil.copy2(result_path, temp_file_path)
+        logging.info(
+            f"Job {job_id}: Successfully copied {result_path} to {temp_file_path}"
+        )
+        return temp_file_path
+    except Exception as e:
+        logging.error(f"Job {job_id}: Failed to copy file: {e}")
+        return None
 
 
 async def cleanup_yt_dlp_job(job_id):
@@ -230,6 +258,7 @@ class YTDLP(commands.Cog):
         # Try to download the video
         temp_file = None
         job_id = None
+        result = None
         try:
             job_id = await submit_yt_dlp_job(url)
             if not job_id:
@@ -252,52 +281,10 @@ class YTDLP(commands.Cog):
                 result = await download_yt_dlp_result(job_id, temp_file)
                 await cleanup_yt_dlp_job(job_id)
 
-                if result and domain not in twitter_domains:
-                    # Successfully downloaded - reply with the video
-                    try:
-                        await message.reply(
-                            content=f"-# Visit [snowsune.net/fops](https://snowsune.net/fops/redirect) to edit bot settings!",
-                            file=discord.File(result),
-                        )
-                        guild_log_info(
-                            self.logger,
-                            guild_id,
-                            f"Successfully posted video for {url}",
-                        )
-
-                        # Send metrics to InfluxDB
-                        send_metric(
-                            "video_downloads", message.guild.id, message.guild.name
-                        )
-                        send_metric(
-                            "ytdlp_job_completed",
-                            message.guild.id,
-                            message.guild.name,
-                        )
-                    except discord.errors.HTTPException as e:
-                        guild_log_warning(
-                            self.logger,
-                            guild_id,
-                            f"Media too large to post: {e}",
-                        )
-                        await self.send_error_to_admin(
-                            message, "Media file too large to post"
-                        )
-                else:
-                    guild_log_warning(
-                        self.logger, guild_id, f"No video result for {url}"
-                    )
-
             elif ok is False:
-                # Download failed
                 guild_log_warning(self.logger, guild_id, f"Download failed for {url}")
                 await cleanup_yt_dlp_job(job_id)
-
-                # Track job failure in InfluxDB
                 send_metric("ytdlp_job_failed", message.guild.id, message.guild.name)
-                # await self.send_error_to_admin(
-                #     message, "Error downloading video from post"
-                # )
 
             else:  # Timed out
                 guild_log_warning(
@@ -305,9 +292,56 @@ class YTDLP(commands.Cog):
                 )
                 if job_id:
                     await cleanup_yt_dlp_job(job_id)
-
-                # Track job timeout in InfluxDB
                 send_metric("ytdlp_job_timeout", message.guild.id, message.guild.name)
+
+            # Always post video if it exists
+            if result:
+                try:
+                    content = f"-# Visit [snowsune.net/fops](https://snowsune.net/fops/redirect) to edit bot settings!"
+                    if (
+                        domain in twitter_domains
+                        and guild_settings
+                        and guild_settings.obfuscate_twitter()
+                    ):
+                        wrapper_domain = guild_settings.twitter_wrapper_domain()
+                        twt_url = (
+                            f"({convert_twitter_link_to_alt(url, wrapper_domain)})"
+                        )
+
+                        # The content if obfuscated
+                        content = f"Originally posted by {message.author.mention} {twt_url}\n{content}"
+                    else:
+                        # Just the normal content
+                        content = f"{content}"
+
+                    # The actual posting
+                    await message.reply(content=content, file=discord.File(result))
+
+                    guild_log_info(
+                        self.logger, guild_id, f"Successfully posted video for {url}"
+                    )
+                    send_metric("video_downloads", message.guild.id, message.guild.name)
+                    send_metric(
+                        "ytdlp_job_completed", message.guild.id, message.guild.name
+                    )
+
+                    # If Twitter, delete original message
+                    if (
+                        domain in twitter_domains
+                        and guild_settings
+                        and guild_settings.obfuscate_twitter()
+                    ):
+                        try:
+                            await message.delete()
+                        except (discord.errors.Forbidden, discord.errors.NotFound):
+                            pass
+                except discord.errors.HTTPException as e:
+                    guild_log_warning(
+                        self.logger, guild_id, f"Media too large to post: {e}"
+                    )
+                    await self.send_error_to_admin(
+                        message, "Media file too large to post"
+                    )
 
         except Exception as e:
             guild_log_warning(self.logger, guild_id, f"yt-dlp Redis error: {e}")
@@ -324,50 +358,26 @@ class YTDLP(commands.Cog):
             if temp_file and os.path.exists(temp_file):
                 os.remove(temp_file)
 
-        # Twitter link obfuscation (fxtwitter.com reposting)
+        # Twitter obfuscation: only if no video was posted
         if (
-            domain in twitter_domains
+            not result
+            and domain in twitter_domains
             and guild_settings
             and guild_settings.obfuscate_twitter()
         ):
             try:
                 wrapper_domain = guild_settings.twitter_wrapper_domain()
-                # Find the URL in the message and convert it
-                words = message.content.split()
-                raw_url = None
-                for word in words:
-                    if "://" in word:
-                        raw_url = word.strip()
-                        alt_link = convert_twitter_link_to_alt(raw_url, wrapper_domain)
-                        break
-                else:
-                    raw_url = message.content
-                    alt_link = convert_twitter_link_to_alt(raw_url, wrapper_domain)
-
-                preserved_text = message.content.replace(raw_url, "").strip()
+                alt_link = convert_twitter_link_to_alt(url, wrapper_domain)
+                preserved_text = message.content.replace(url, "").strip()
                 formatted_text = preserved_text or ""
                 intro_line = f"Originally posted by {message.author.mention}"
                 if formatted_text:
                     intro_line += f"\n>>> {formatted_text}"
 
-                await message.channel.send(
-                    f"{alt_link}\n{intro_line}"
-                )  # This was suggested by Lilifox <3
-
-                # Not all servers allow this permission!
+                await message.channel.send(f"{alt_link}\n{intro_line}")
                 await message.delete()
-            except discord.errors.Forbidden:
-                guild_log_warning(
-                    self.logger,
-                    guild_id,
-                    f"Bot lacks permissions to delete messages in {message.guild.name}.",
-                )
-            except discord.errors.NotFound:
-                guild_log_warning(
-                    self.logger,
-                    guild_id,
-                    f"Message was already deleted in {message.guild.name}.",
-                )
+            except (discord.errors.Forbidden, discord.errors.NotFound):
+                pass
 
 
 async def setup(bot):
