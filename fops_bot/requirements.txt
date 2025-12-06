@@ -11,7 +11,7 @@ opencv-python
 sqlalchemy
 alembic
 colorlog
-faapi
+faapi>=3.12.1
 pint
 influxdb-client
 redis
