@@ -2,10 +2,14 @@ import os
 import shutil
 import subprocess
 import logging
+import time
 from urllib.parse import urlparse, urlunparse
-from typing import Optional
+from typing import Optional, Dict, Any
+from rq import get_current_job
 
 DISCORD_FILE_SIZE_LIMIT = 8 * 1024 * 1024  # 8MB
+MAX_JOB_SECONDS = 600
+shared_output_root = "/tmp/yt_dlp_output"
 
 
 def extract_url_from_text(text: str):
@@ -199,3 +203,84 @@ def cleanup_files(*file_paths):
     for path in file_paths:
         if path and os.path.isfile(path):
             os.remove(path)
+
+
+def process_video(url: str) -> Dict[str, Any]:
+    """
+    RQ worker function to process a video download.
+    This function is called by RQ workers.
+
+    Args:
+        url: The URL of the video to download
+
+    Returns:
+        Dict with status, result_path, original_path, error, etc.
+    """
+    job = get_current_job()
+    job_id = job.id if job else str(int(time.time()))
+
+    os.makedirs(shared_output_root, exist_ok=True)
+    job_output_dir = os.path.join(shared_output_root, job_id)
+    os.makedirs(job_output_dir, exist_ok=True)
+
+    logging.info(f"[RQ Worker] Starting job {job_id} for URL: {url}")
+
+    status_data = {
+        "status": "running",
+        "started_at": time.time(),
+        "url": url,
+        "result_path": None,
+        "original_path": None,
+        "error": None,
+    }
+
+    try:
+        file_path = run_yt_dlp(url, job_output_dir, job_id, timeout=MAX_JOB_SECONDS)
+        if not file_path:
+            status_data["status"] = "failed"
+            status_data["error"] = "yt-dlp failed or no file"
+            status_data["finished_at"] = time.time()
+            logging.error(f"[RQ Worker] Job {job_id} failed: yt-dlp failed or no file")
+            shutil.rmtree(job_output_dir, ignore_errors=True)
+            return status_data
+
+        status_data["original_path"] = file_path
+        logging.info(f"[RQ Worker] Job {job_id} downloaded file: {file_path}")
+        result_path = compress_file_if_needed(file_path, timeout=MAX_JOB_SECONDS)
+        status_data["result_path"] = result_path
+
+        if result_path:
+            status_data["status"] = "done"
+            status_data["finished_at"] = time.time()
+            logging.info(
+                f"[RQ Worker] Job {job_id} completed. Result file: {result_path}"
+            )
+
+            # Clean up all files in the job directory except the result file
+            for f in os.listdir(job_output_dir):
+                fpath = os.path.join(job_output_dir, f)
+                if fpath != result_path:
+                    try:
+                        os.remove(fpath)
+                        logging.info(
+                            f"[RQ Worker] Job {job_id} cleaned up file: {fpath}"
+                        )
+                    except Exception:
+                        pass
+        else:
+            status_data["status"] = "failed"
+            status_data["error"] = "Compression failed or file too large"
+            status_data["finished_at"] = time.time()
+            logging.error(
+                f"[RQ Worker] Job {job_id} failed: Compression failed or file too large"
+            )
+            shutil.rmtree(job_output_dir, ignore_errors=True)
+
+    except Exception as e:
+        status_data["status"] = "failed"
+        status_data["error"] = str(e)
+        status_data["finished_at"] = time.time()
+        logging.exception(f"[RQ Worker] Job {job_id} encountered an exception:")
+        shutil.rmtree(job_output_dir, ignore_errors=True)
+
+    return status_data

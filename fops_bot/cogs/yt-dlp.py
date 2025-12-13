@@ -1,7 +1,6 @@
 import os
 import time
 import uuid
-import json
 import discord
 import logging
 import asyncio
@@ -13,12 +12,25 @@ from urllib.parse import urlparse, urlunparse
 
 from cogs.guild_cog import get_guild
 from utilities.influx_metrics import send_metric
-from utilities.redis_client import redis_client
 from utilities.guild_log import (
     info as guild_log_info,
     warning as guild_log_warning,
     error as guild_log_error,
 )
+from rq import Queue, Job
+from redis import Redis
+
+
+# RQ Queue setup
+def get_rq_queue():
+    """Get RQ queue for yt-dlp jobs"""
+    redis_host = os.environ.get("REDIS_HOST", "redis")
+    redis_port = int(os.environ.get("REDIS_PORT", "6379"))
+    redis_db = int(os.environ.get("REDIS_DB", "0"))
+    redis_conn = Redis(
+        host=redis_host, port=redis_port, db=redis_db, decode_responses=True
+    )
+    return Queue("ytdlp", connection=redis_conn)
 
 
 def convert_twitter_link_to_alt(
@@ -59,91 +71,87 @@ def message_contains(message: discord.Message, valid_domains: dict) -> Optional[
 
 
 async def submit_yt_dlp_job(url):
-    """Submit a job to yt-dlp service via Redis"""
-    job_id = str(uuid.uuid4())
-    job_data = {"job_id": job_id, "url": url}
+    """
+    Submits a job to the yt-dlp service via RQ.
 
-    if redis_client.publish_job("ytdlp:jobs", job_data):
-        return job_id
-    return None
+    Args:
+        url (str): The URL of the video to download.
 
-
-async def wait_for_job_completion(job_id, timeout=300):
-    """Wait for job completion via Redis pub/sub"""
-
-    # Use asyncio to run the blocking Redis pubsub in a thread
-    loop = asyncio.get_event_loop()
-
-    def _wait_for_message():
-        pubsub = redis_client.subscribe_to_channel("ytdlp:status")
-        if not pubsub:
-            logging.error(f"Failed to subscribe to ytdlp:status channel")
-            return None
-
-        try:
-            start_time = time.time()
-
-            for message in pubsub.listen():
-                # Check timeout
-                if time.time() - start_time > timeout:
-                    logging.warning(f"Job {job_id} timed out after {timeout}s")
-                    return None
-
-                if message["type"] == "message":
-                    try:
-                        data = json.loads(message["data"])
-                        if data.get("job_id") == job_id:
-                            status = data.get("status")
-                            if status == "done":
-                                logging.info(f"Job {job_id} completed successfully")
-                                return True
-                            elif status == "failed":
-                                logging.warning(f"Job {job_id} failed")
-                                return False
-                    except json.JSONDecodeError:
-                        continue
-        except Exception as e:
-            logging.error(f"Error waiting for job completion: {e}")
-            return None
-        finally:
-            pubsub.close()
-
-        return None  # Timed out
-
-    # Run the blocking Redis operation in a thread pool
-    result = await loop.run_in_executor(None, _wait_for_message)
-    return result
-
-
-async def download_yt_dlp_result(job_id, temp_file_path):
-    """Download result file from yt-dlp service"""
-    status_data = redis_client.get_job_status(job_id)
-    if not status_data:
-        logging.warning(f"Job {job_id}: No status data found in Redis")
+    Returns:
+        Job: The RQ job object if successful, None otherwise.
+    """
+    try:
+        queue = get_rq_queue()
+        job = queue.enqueue(
+            "utilities.yt_dlp_logic.process_video",
+            url,
+            job_id=str(uuid.uuid4()),
+            timeout=600,
+        )
+        return job
+    except Exception as e:
+        logging.error(f"Failed to enqueue job: {e}")
         return None
 
+
+async def wait_for_job_completion(job, timeout=300):
+    """
+    Waits for job completion using RQ.
+
+    Args:
+        job: The RQ job object.
+        timeout (int): The timeout in seconds.
+
+    Returns:
+        bool: True if the job completed successfully, False otherwise.
+    """
+    if not job:
+        return False
+
+    loop = asyncio.get_event_loop()
+
+    def _wait_for_result():
+        try:
+            result = job.wait(timeout=timeout)
+            if result and result.get("status") == "done":
+                logging.info(f"Job {job.id} completed successfully")
+                return True
+            else:
+                logging.warning(f"Job {job.id} failed or returned no result")
+                return False
+        except Exception as e:
+            logging.error(f"Error waiting for job {job.id}: {e}")
+            return False
+
+    return await loop.run_in_executor(None, _wait_for_result)
+
+
+async def download_yt_dlp_result(job, temp_file_path):
+    """Copy result file from yt-dlp service to temp location"""
+    if not job or not job.result:
+        logging.warning(f"Job {job.id if job else 'unknown'}: No result data")
+        return None
+
+    status_data = job.result
     status = status_data.get("status")
     if status != "done":
-        logging.warning(f"Job {job_id}: Status is '{status}', expected 'done'")
+        logging.warning(f"Job {job.id}: Status is '{status}', expected 'done'")
         return None
 
     result_path = status_data.get("result_path")
     if not result_path:
-        logging.warning(
-            f"Job {job_id}: No result_path in status data. Status data: {status_data}"
-        )
+        logging.warning(f"Job {job.id}: No result_path in result data")
         return None
 
     if not os.path.exists(result_path):
-        logging.warning(f"Job {job_id}: Result file does not exist at {result_path}")
-        # Check if directory exists
+        logging.warning(f"Job {job.id}: Result file does not exist at {result_path}")
         result_dir = os.path.dirname(result_path)
         if os.path.exists(result_dir):
             logging.info(
-                f"Job {job_id}: Directory exists, listing contents: {os.listdir(result_dir)}"
+                f"Job {job.id}: Directory exists, listing contents: {os.listdir(result_dir)}"
             )
         else:
-            logging.warning(f"Job {job_id}: Directory does not exist: {result_dir}")
+            logging.warning(f"Job {job.id}: Directory does not exist: {result_dir}")
         return None
 
     # Copy file to temp location
@@ -152,17 +160,12 @@ async def download_yt_dlp_result(job_id, temp_file_path):
     try:
         shutil.copy2(result_path, temp_file_path)
         logging.info(
-            f"Job {job_id}: Successfully copied {result_path} to {temp_file_path}"
+            f"Job {job.id}: Successfully copied {result_path} to {temp_file_path}"
         )
         return temp_file_path
     except Exception as e:
-        logging.error(f"Job {job_id}: Failed to copy file: {e}")
+        logging.error(f"Job {job.id}: Failed to copy file: {e}")
         return None
-
-
-async def cleanup_yt_dlp_job(job_id):
-    """Clean up job resources"""
-    redis_client.delete_job_status(job_id)
 
 
 class YTDLP(commands.Cog):
@@ -257,11 +260,11 @@ class YTDLP(commands.Cog):
 
         # Try to download the video
         temp_file = None
-        job_id = None
+        job = None
         result = None
         try:
-            job_id = await submit_yt_dlp_job(url)
-            if not job_id:
+            job = await submit_yt_dlp_job(url)
+            if not job:
                 guild_log_warning(
                     self.logger, guild_id, f"Failed to submit job for {url}"
                 )
@@ -271,27 +274,23 @@ class YTDLP(commands.Cog):
             # Track job submission in InfluxDB
             send_metric("ytdlp_job_submitted", message.guild.id, message.guild.name)
 
-            ok = await wait_for_job_completion(job_id)
+            ok = await wait_for_job_completion(job)
 
             if ok is True:
                 # Download to a temp file for Discord upload
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
                     temp_file = tmp.name
 
-                result = await download_yt_dlp_result(job_id, temp_file)
-                await cleanup_yt_dlp_job(job_id)
+                result = await download_yt_dlp_result(job, temp_file)
 
             elif ok is False:
                 guild_log_warning(self.logger, guild_id, f"Download failed for {url}")
-                await cleanup_yt_dlp_job(job_id)
                 send_metric("ytdlp_job_failed", message.guild.id, message.guild.name)
 
             else:  # Timed out
                 guild_log_warning(
                     self.logger, guild_id, f"Download timed out for {url}"
                 )
-                if job_id:
-                    await cleanup_yt_dlp_job(job_id)
                 send_metric("ytdlp_job_timeout", message.guild.id, message.guild.name)
 
             # Always post video if it exists
@@ -345,8 +344,6 @@ class YTDLP(commands.Cog):
 
         except Exception as e:
             guild_log_warning(self.logger, guild_id, f"yt-dlp Redis error: {e}")
-            if job_id:
-                await cleanup_yt_dlp_job(job_id)
 
             # Track job error in InfluxDB
             send_metric("ytdlp_job_error", message.guild.id, message.guild.name)

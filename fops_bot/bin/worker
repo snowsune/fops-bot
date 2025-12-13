@@ -1,0 +1,10 @@
+#!/bin/bash
+
+set -e
+
+# Set PYTHONPATH so RQ can find the modules
+export PYTHONPATH=/app
+
+# Run RQ worker for yt-dlp jobs
+exec rq worker ytdlp --with-scheduler
+

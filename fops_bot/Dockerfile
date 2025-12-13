@@ -22,8 +22,8 @@ RUN pip install --upgrade pip --no-cache-dir
 WORKDIR ${HOME}
 ENV PYTHONPATH=/app
 
-# Add any packages we need
-RUN apt update && apt install -y python-dev-is-python3 curl libgl1 libglx-mesa0 libglib2.0-0 libsm6 libxext6 libxrender-dev
+# Add required packages
+RUN apt update && apt install -y python-dev-is-python3 curl libgl1 libglx-mesa0 libglib2.0-0 libsm6 libxext6 libxrender-dev ffmpeg
 
 # Copy requirements, setup.py, alembic.ini, and bin to /app
 COPY README.md ./
@@ -34,6 +34,10 @@ COPY bin ./bin
 
 # Add bin to PATH
 ENV PATH $PATH:/app/bin
+
+# Install yt-dlp binary
+RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp && \
+    chmod a+rx /usr/local/bin/yt-dlp
 
 # Install requirements
 RUN pip install -r requirements.txt --no-cache-dir

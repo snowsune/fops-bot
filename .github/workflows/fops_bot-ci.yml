@@ -11,7 +11,6 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_FOPS: ghcr.io/snowsune/fops-bot
-  IMAGE_YTDLP: ghcr.io/snowsune/yt-dlp-service
 
 jobs:
   # test:
@@ -74,11 +73,6 @@ jobs:
             image: ghcr.io/snowsune/fops-bot
             notify_name: Fops Bot
             dockerfile: ./fops_bot/Dockerfile
-          - service: yt_dlp_service
-            context: ./yt_dlp_service
-            image: ghcr.io/snowsune/yt-dlp-service
-            notify_name: yt-dlp Service
-            dockerfile: ./yt_dlp_service/Dockerfile
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
