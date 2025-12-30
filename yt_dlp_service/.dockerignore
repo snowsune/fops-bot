@@ -1,8 +1,0 @@
-# Ignore everything by default
-*
-!app.py
-!utilities
-!yt_dlp_logic.py
-!__init__.py
-!requirements.txt
-!Dockerfile

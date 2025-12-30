@@ -28,18 +28,23 @@ services:
     depends_on:
       - redis
     
-  yt-dlp:
+  yt-dlp-worker:
+    image: fops_bot:${TAG}
     build:
-      context: ./yt_dlp_service
+      context: ./fops_bot
       dockerfile: Dockerfile
+    env_file:
+      - .env
     environment:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_DB: 0
     volumes:
       - yt_dlp_output:/tmp/yt_dlp_output
+    entrypoint: ["/app/bin/worker"]
     depends_on:
       - redis
+      - fops_bot
 
 volumes:
   yt_dlp_output:

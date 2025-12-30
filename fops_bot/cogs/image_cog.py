@@ -194,7 +194,8 @@ class ImageCog(commands.Cog, name="ImageCog"):
             # The 'message' parameter is the message from the context menu interaction
             if message:
                 await message.reply(
-                    file=discord.File(io.BytesIO(output_bytes), f"{task_name}.png")
+                    content=f"-# Triggered by {interaction.user.mention}",
+                    file=discord.File(io.BytesIO(output_bytes), f"{task_name}.png"),
                 )
             else:
                 self.logger.error(f"No message provided for interaction")

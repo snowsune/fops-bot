@@ -87,59 +87,6 @@ class RedisClient:
         except:
             return False
 
-    def publish_job(self, channel: str, job_data: Dict[str, Any]) -> bool:
-        """Publish job to Redis channel. Reinitializes connection on failure."""
-        # Try once
-        try:
-            self._ensure_connected()
-            result = self._client.publish(channel, json.dumps(job_data))
-            if result > 0:
-                return True
-        except Exception as e:
-            logger.warning(f"Publish failed: {e}")
-
-        # If we get here, it failed - reinitialize and try once more
-        logger.info("Re-initializing Redis connection and retrying publish")
-        self._client = None
-        try:
-            self._connect()
-            self._client.ping()
-            result = self._client.publish(channel, json.dumps(job_data))
-            return result > 0
-        except Exception as e:
-            logger.error(f"Failed to publish after reinitialize: {e}")
-            self._client = None
-            return False
-
-    def set_job_status(
-        self, job_id: str, status_data: Dict[str, Any], ttl: int = 3600
-    ) -> bool:
-        """Set job status in Redis."""
-        try:
-            return self._call(
-                lambda c: c.setex(f"job_status:{job_id}", ttl, json.dumps(status_data))
-            )
-        except Exception as e:
-            logger.error(f"Failed to set job status: {e}")
-            return False
-
-    def get_job_status(self, job_id: str) -> Optional[Dict[str, Any]]:
-        """Get job status from Redis."""
-        try:
-            data = self._call(lambda c: c.get(f"job_status:{job_id}"))
-            return json.loads(data) if data else None
-        except Exception as e:
-            logger.error(f"Failed to get job status: {e}")
-            return None
-
-    def delete_job_status(self, job_id: str) -> bool:
-        """Delete job status from Redis."""
-        try:
-            return self._call(lambda c: c.delete(f"job_status:{job_id}")) > 0
-        except Exception as e:
-            logger.error(f"Failed to delete job status: {e}")
-            return False
-
     def set_service_health(
         self, service_name: str, health_data: Dict[str, Any], ttl: int = 60
     ) -> bool:
@@ -161,17 +108,6 @@ class RedisClient:
             return json.loads(data) if data else None
         except Exception as e:
             logger.error(f"Failed to get health: {e}")
-            return None
-
-    def subscribe_to_channel(self, channel: str):
-        """Subscribe to Redis channel."""
-        try:
-            self._ensure_connected()
-            pubsub = self._client.pubsub()
-            pubsub.subscribe(channel)
-            return pubsub
-        except Exception as e:
-            logger.error(f"Failed to subscribe: {e}")
             return None
 
 
