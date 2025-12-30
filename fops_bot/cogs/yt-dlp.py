@@ -17,7 +17,8 @@ from utilities.guild_log import (
     warning as guild_log_warning,
     error as guild_log_error,
 )
-from rq import Queue, Job
+from rq import Queue
+from rq.job import Job
 from redis import Redis
 
 
@@ -28,7 +29,7 @@ def get_rq_queue():
     redis_port = int(os.environ.get("REDIS_PORT", "6379"))
     redis_db = int(os.environ.get("REDIS_DB", "0"))
     redis_conn = Redis(
-        host=redis_host, port=redis_port, db=redis_db, decode_responses=True
+        host=redis_host, port=redis_port, db=redis_db, decode_responses=False
     )
     return Queue("ytdlp", connection=redis_conn)
 
@@ -86,7 +87,7 @@ async def submit_yt_dlp_job(url):
             "utilities.yt_dlp_logic.process_video",
             url,
             job_id=str(uuid.uuid4()),
-            timeout=600,
+            job_timeout=600,  # Job timeout in seconds
         )
         return job
     except Exception as e:
@@ -112,15 +113,43 @@ async def wait_for_job_completion(job, timeout=300):
 
     def _wait_for_result():
         try:
-            result = job.wait(timeout=timeout)
-            if result and result.get("status") == "done":
-                logging.info(f"Job {job.id} completed successfully")
-                return True
-            else:
-                logging.warning(f"Job {job.id} failed or returned no result")
-                return False
+            start_time = time.time()
+            # Poll for job completion with timeout
+            while time.time() - start_time < timeout:
+                # Refresh job from Redis to get latest status
+                job.refresh()
+                status = job.get_status()
+                if status == "finished":
+                    result = job.result
+                    if (
+                        result
+                        and isinstance(result, dict)
+                        and result.get("status") == "done"
+                    ):
+                        logging.info(f"Job {job.id} completed successfully")
+                        return True
+                    else:
+                        logging.warning(
+                            f"Job {job.id} failed or returned no result: {result}"
+                        )
+                        return False
+                elif status == "failed":
+                    logging.warning(f"Job {job.id} failed")
+                    return False
+                elif status in ("queued", "started"):
+                    time.sleep(0.5)  # Poll every 0.5 seconds
+                    continue
+                else:
+                    time.sleep(0.5)
+
+            # Timeout reached
+            logging.warning(f"Job {job.id} timed out after {timeout}s")
+            return False
         except Exception as e:
             logging.error(f"Error waiting for job {job.id}: {e}")
+            import traceback
+
+            logging.error(traceback.format_exc())
             return False
 
     return await loop.run_in_executor(None, _wait_for_result)
@@ -128,11 +157,24 @@ async def wait_for_job_completion(job, timeout=300):
 
 async def download_yt_dlp_result(job, temp_file_path):
     """Copy result file from yt-dlp service to temp location"""
-    if not job or not job.result:
-        logging.warning(f"Job {job.id if job else 'unknown'}: No result data")
+    if not job:
+        logging.warning("No job provided")
+        return None
+
+    # Refresh job to get latest result
+    try:
+        job.refresh()
+    except Exception as e:
+        logging.warning(f"Failed to refresh job {job.id}: {e}")
+
+    if not job.result:
+        logging.warning(f"Job {job.id}: No result data")
         return None
 
     status_data = job.result
+    if not isinstance(status_data, dict):
+        logging.warning(f"Job {job.id}: Result is not a dict: {type(status_data)}")
+        return None
     status = status_data.get("status")
     if status != "done":
         logging.warning(f"Job {job.id}: Status is '{status}', expected 'done'")
@@ -186,6 +228,7 @@ class YTDLP(commands.Cog):
             "vxtwitter.com": "Twitter",
             "fxbsky.app": "Bluesky",
             "bsky.app": "Bluesky",
+            "pinterest.com": "Pinterest",
         }
 
     async def send_error_to_admin(self, message: discord.Message, error_msg: str):
