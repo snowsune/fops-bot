@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.14
 
 # Authors
 LABEL authors="vixi@snowsue.net"
@@ -23,7 +23,17 @@ WORKDIR ${HOME}
 ENV PYTHONPATH=/app
 
 # Add required packages
-RUN apt update && apt install -y python-dev-is-python3 curl libgl1 libglx-mesa0 libglib2.0-0 libsm6 libxext6 libxrender-dev ffmpeg
+RUN apt update && apt install -y \
+    curl \
+    libgl1 \
+    libglx-mesa0 \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    ffmpeg \
+    libxml2-dev \
+    libxslt1-dev
 
 # Copy requirements, setup.py, alembic.ini, and bin to /app
 COPY README.md ./

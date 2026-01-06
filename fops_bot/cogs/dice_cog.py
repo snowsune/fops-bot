@@ -81,8 +81,6 @@ class DiceCog(commands.Cog, name="DiceCog"):
                     return +operand
                 else:
                     raise ValueError(f"Unsupported unary operator: {type(node.op)}")
-            elif isinstance(node, ast.Num):
-                return node.n
             elif isinstance(node, ast.Constant):
                 return node.value
             else:
