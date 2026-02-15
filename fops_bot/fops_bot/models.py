@@ -183,6 +183,14 @@ class HoleUserColor(Base):
 
 
 # Database connection setup
+# Use a single shared engine and session factory to avoid connection exhaustion.
+# Previously, get_session() created a NEW engine on every call; each engine has
+# its own pool (default 5 + 10 overflow = 15 connections). This caused the bot
+# to exhaust connection slots on shared PostgreSQL servers.
+_engine = None
+_SessionFactory = None
+
+
 def get_database_url():
     """
     Get the database URL from environment variables or default to SQLite.
@@ -204,17 +212,30 @@ def get_database_url():
 
 
 def get_engine():
-    """Get a SQLAlchemy engine from the database URL."""
-    db_url = get_database_url()
-
-    # SQLite-specific engine configuration
-    if db_url.startswith("sqlite:///"):
-        return create_engine(db_url, connect_args={"check_same_thread": False})
-    else:
-        return create_engine(db_url)
+    """Get the single shared SQLAlchemy engine (lazy-initialized)."""
+    global _engine
+    if _engine is None:
+        db_url = get_database_url()
+        if db_url.startswith("sqlite:///"):
+            _engine = create_engine(
+                db_url, connect_args={"check_same_thread": False}
+            )
+        else:
+            # PostgreSQL: limit pool size to avoid exhausting shared server connections.
+            # Default would be pool_size=5, max_overflow=10 (15 conns per engine!).
+            # With a single shared engine, we cap at 5 connections total.
+            _engine = create_engine(
+                db_url,
+                pool_size=2,
+                max_overflow=3,
+                pool_pre_ping=True,
+            )
+    return _engine
 
 
 def get_session():
-    engine = get_engine()
-    Session = sessionmaker(bind=engine)
-    return Session()
+    """Get a new session from the shared engine. Always use with a context manager."""
+    global _SessionFactory
+    if _SessionFactory is None:
+        _SessionFactory = sessionmaker(bind=get_engine(), expire_on_commit=False)
+    return _SessionFactory()
