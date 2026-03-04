@@ -47,7 +47,7 @@ class FAPost(Post):
             rating=rating,
             tags=[t.lower() for t in tags],
             url=f"https://www.furaffinity.net/view/{post_id}/",
-            xfa_url=f"https://www.xfuraffinity.net/view/{post_id}/",
+            xfa_url=f"https://www.fxfuraffinity.net/view/{post_id}/",
             author=getattr(submission, "author", None),
             description=getattr(submission, "description", None),
         )
