@@ -140,63 +140,46 @@ def compress_file_if_needed(
         audio_bitrate = "64k"
         framerate = "15"
 
-    # Build scale filter
-    if scale_factor < 1.0:
-        scale_filter = f"scale=iw*{scale_factor}:ih*{scale_factor}"
-    else:
-        scale_filter = "scale=iw:ih"  # No scaling
-
+    # Even dimensions required for libx264 + yuv420p (trunc works for scale_factor 1.0 too)
+    vf = f"scale=trunc(iw*{scale_factor}/2)*2:trunc(ih*{scale_factor}/2)*2"
     logging.info(
-        f"Using compression: {scale_filter} @ {video_bitrate} video, {audio_bitrate} audio, {framerate}fps"
+        f"Using compression: {vf} @ {video_bitrate} video, {audio_bitrate} audio, {framerate}fps"
+    )
+    buf = f"{int(video_bitrate[:-1]) * 2}k"
+    cmd = [
+        "ffmpeg", "-hide_banner", "-loglevel", "warning", "-i", file_path,
+        "-vf", vf, "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "fast",
+        "-b:v", video_bitrate, "-maxrate", video_bitrate, "-bufsize", buf,
+        "-r", framerate, "-c:a", "aac", "-b:a", audio_bitrate,
+        "-movflags", "+faststart", "-y", compressed_file,
+    ]
+    try:
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=timeout
+        )
+    except subprocess.TimeoutExpired:
+        logging.error("ffmpeg compression timed out after %s seconds", timeout)
+        return None
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "").strip()
+        logging.error(
+            "ffmpeg failed (%s)%s",
+            result.returncode,
+            f": {detail}" if detail else "",
+        )
+        return None
+
+    compressed_size = os.path.getsize(compressed_file)
+    logging.info(
+        f"Compression result: {original_size:,} → {compressed_size:,} bytes ({compressed_size/size_limit:.2f}x limit)"
     )
 
-    try:
-        subprocess.run(
-            [
-                "ffmpeg",
-                "-i",
-                file_path,
-                "-vf",
-                scale_filter,
-                "-b:v",
-                video_bitrate,
-                "-maxrate",
-                video_bitrate,
-                "-bufsize",
-                f"{int(video_bitrate[:-1]) * 2}k",  # Buffer size = 2x bitrate
-                "-r",
-                framerate,
-                "-c:a",
-                "aac",
-                "-b:a",
-                audio_bitrate,
-                "-y",  # Overwrite output file
-                compressed_file,
-            ],
-            check=True,
-            timeout=timeout,
-            capture_output=True,
-        )
-
-        compressed_size = os.path.getsize(compressed_file)
-        logging.info(
-            f"Compression result: {original_size:,} → {compressed_size:,} bytes ({compressed_size/size_limit:.2f}x limit)"
-        )
-
-        if compressed_size <= size_limit:
-            return compressed_file
-        else:
-            logging.error(
-                f"Compressed file still too large: {compressed_size:,} bytes (limit: {size_limit:,})"
-            )
-            return None
-
-    except subprocess.TimeoutExpired:
-        logging.error(f"ffmpeg compression timed out after {timeout} seconds")
-        return None
-    except subprocess.CalledProcessError as e:
-        logging.error(f"ffmpeg compression failed: {e}")
-        return None
+    if compressed_size <= size_limit:
+        return compressed_file
+    logging.error(
+        f"Compressed file still too large: {compressed_size:,} bytes (limit: {size_limit:,})"
+    )
+    return None
 
 
 def cleanup_files(*file_paths):

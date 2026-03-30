@@ -16,12 +16,7 @@
    DB_PORT=5438
    ```
 
-3. Start the development environment:
-   ```bash
-   make dev
-   ```
-
-4. Run database migrations:
+3. Run database migrations:
    ```bash
    pipenv run alembic upgrade head
    ```
@@ -29,3 +24,6 @@
 Theres lots of stuff here i dont want you to scan or parse at all!
 
 blah blah blah
+
+Can also quick-start a stack with
+./run_dev.sh

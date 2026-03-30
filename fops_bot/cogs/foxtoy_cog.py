@@ -1,6 +1,8 @@
 # 2024, Fops Bot
 # MIT License
 
+import os
+
 import discord
 import logging
 import asyncio
@@ -22,6 +24,7 @@ GUILD = "1153521286086148156"  # Vixi's Den
 CHAN = "1354254133330317382"  # Vixens Lounge
 ADMIN_ROLE = "1218272502434762792"  # Moderator
 FOX_ROLE = "1354290953661452429"  # Vixen
+BETA_TESTERS_ROLE_NAME = "Beta Testers"
 
 
 class FoxtoyCog(commands.Cog, name="FoxtoyCog"):
@@ -78,17 +81,29 @@ class FoxtoyCog(commands.Cog, name="FoxtoyCog"):
             self.logger.error("Could not find channel")
             return
 
-        # Get all members who don't have admin or fox role
+        beta_role = None
+        beta_rid = os.environ.get("FOXTOY_BETA_TESTERS_ROLE", "").strip()
+        if beta_rid:
+            beta_role = guild.get_role(int(beta_rid))
+        if beta_role is None:
+            beta_role = discord.utils.get(guild.roles, name=BETA_TESTERS_ROLE_NAME)
+        if not beta_role:
+            self.logger.error(
+                "Fox Toy: no Beta Testers role (set FOXTOY_BETA_TESTERS_ROLE or name a role %r)",
+                BETA_TESTERS_ROLE_NAME,
+            )
+            return
+
+        # Members: not bot, not mod/admin, not Vixen, must have Beta Testers
         eligible_members = []
         for member in guild.members:
-            # Skip bots
             if member.bot:
                 continue
-            # Skip if member has admin role (if admin role is set)
             if ADMIN_ROLE and any(role.id == int(ADMIN_ROLE) for role in member.roles):
                 continue
-            # Skip if member has fox role (if fox role is set)
             if FOX_ROLE and any(role.id == int(FOX_ROLE) for role in member.roles):
+                continue
+            if beta_role not in member.roles:
                 continue
             eligible_members.append(member)
 
