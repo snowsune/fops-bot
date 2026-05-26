@@ -90,6 +90,26 @@ def vyxxy_says_task(message: str) -> Image.Image:
     return frame
 
 
+@register_image_task("Chrissy Theater", requires_attachment=True)
+def chrissy_theater_task(input_image: Image.Image) -> Image.Image:
+    frame = Image.open("fops_bot/templates/chrissy_theater.png")
+
+    base_x, base_y = frame.size
+
+    result = generate_underlay(
+        base_x,
+        base_y,
+        (440, 637),
+        (2026, 838),
+        (2000, 1475),
+        (385, 1480),
+        input_image,
+    )
+
+    result.paste(frame, (0, 0), frame)
+    return result
+
+
 @register_image_task("Soy Point", requires_attachment=True)
 def browsing_fox_task(input_image: Image.Image) -> Image.Image:
     frame = Image.open("fops_bot/templates/soy.png")
