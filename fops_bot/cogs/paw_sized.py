@@ -52,6 +52,10 @@ paw_data = {
         "length_digigrade": 16.0,
         "length_plantigrade": 16.0,
     },
+    "**Snow's** Paws": {
+        "length_digigrade": 12.0,
+        "length_plantigrade": 12.0,
+    },
 }
 
 
