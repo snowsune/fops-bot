@@ -90,6 +90,28 @@ def vyxxy_says_task(message: str) -> Image.Image:
     return frame
 
 
+@register_image_task("Niko Says", requires_attachment=False)
+def niko_says_task(message: str) -> Image.Image:
+    logging.info(f"Processing nikosays with message: {message}")
+
+    frame = Image.open("fops_bot/templates/nikosays.png")
+
+    # Speech bubble in the top-right corner
+    text_region = (1033, 115, 360, 120)
+
+    draw = ImageDraw.Draw(frame)
+
+    font, lines = fit_text_to_region(
+        draw, message, text_region, "fops_bot/templates/impact.ttf", max_font_size=70
+    )
+
+    x, y, _, _ = text_region
+
+    draw.text((x, y), lines, font=font, fill=(0, 0, 0))
+
+    return frame
+
+
 @register_image_task("Chrissy Theater", requires_attachment=True)
 def chrissy_theater_task(input_image: Image.Image) -> Image.Image:
     frame = Image.open("fops_bot/templates/chrissy_theater.png")
