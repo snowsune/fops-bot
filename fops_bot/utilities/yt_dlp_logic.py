@@ -49,9 +49,11 @@ def run_yt_dlp(
                 "-o",
                 out_template,
                 "--merge-output-format",
-                "mp4",  # For best compatibilty.
+                "mp4",
+                "--remux-video",
+                "mp4",
                 "-f",
-                "mp4/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+                'bv*[vcodec~="^(avc1|h264)"]+ba[acodec~="^(mp4a|aac)"]/bv*+ba/b',
             ],
             capture_output=True,
             text=True,
