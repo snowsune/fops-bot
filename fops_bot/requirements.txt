@@ -5,7 +5,7 @@ lxml
 pytz
 python_weather
 pyyaml
-psycopg2-binary
+psycopg[binary]
 pillow
 opencv-python
 sqlalchemy
